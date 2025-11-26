@@ -1,0 +1,80 @@
+# Bus Ticket Booking – Auth & Dashboard (Week 1)
+
+Monorepo with **frontend (Vite + React + Tailwind)** and **backend (NestJS + Postgres + JWT)** implementing the core authentication/authorization and a dashboard prototype for Assignment 1.
+
+## Quick Start
+
+1. **Backend**
+   ```bash
+   cd backend
+   cp .env.example .env   # update DATABASE_URL, JWT/Google secrets
+   npm install
+   npm run start:dev
+   ```
+2. **Frontend**
+   ```bash
+   cd frontend
+   cp .env.example .env
+   npm install
+   npm run dev
+   ```
+   The app expects `VITE_API_URL=http://localhost:3000/api`.
+
+## Authentication & Authorization
+
+- **Email/Password**: `POST /api/auth/register` and `POST /api/auth/login` (bcrypt hashed). Account lockout after 5 failed attempts for 15 minutes.
+- **Tokens**: Access JWT (15m) + Refresh JWT (7d). Refresh tokens are hashed on the user record; `/api/auth/refresh` exchanges them.
+- **Social login**: `POST /api/auth/google` expects a Google ID token (via Google Identity Services on the client). Same session model as email/password.
+- **Password reset**: `/api/auth/forgot` issues a 1h reset token (JWT) and logs it (replace with email service). `/api/auth/reset` applies the change and clears refresh tokens. `/api/auth/change-password` for logged-in users.
+- **Email verification**: `/api/auth/verify-request` emits a 1h verification token (logged for now). `/api/auth/verify` marks the user as verified.
+  - OAuth popup flow available via `/api/auth/google/start` + `/api/auth/google/callback`.
+- **Authorization**: Role-based (`admin | agent | user`) enforced on client routes and server guards (e.g., `/api/admin/users`, `/api/dashboard/admin-metrics`). UI hides admin nav for non-admins.
+- **Storage choice**: Short-lived access token in memory; refresh token + userId optionally persisted when “Remember me” is checked. Explains risk trade-off; safer storage via httpOnly cookie can be added later.
+
+## Design System & Layout
+
+- Theme tokens in `tailwind.config.js` (primary/secondary/surface colors, spacing scale, typography).
+- Reusable components: `AppShell`, `Card`, `Button`, `FormField`, `ProtectedRoute`.
+- Dashboard widgets: summary cards, route occupancy bars, live activity feed; admin-only metrics endpoint present.
+- Wireframe lives in `design/wireframe.md`. Visual style: dark glassmorphism with blue/cyan gradients and Space Grotesk/Inter typography.
+
+## API Surface (selected)
+
+- `POST /api/auth/register` – create user, returns tokens
+- `POST /api/auth/login` – login + lockout handling
+- `POST /api/auth/google` – Google ID token exchange
+- `POST /api/auth/refresh` – access/refresh rotation
+- `POST /api/auth/forgot` / `POST /api/auth/reset` – password reset (JWT token demo)
+- `POST /api/auth/verify-request` / `POST /api/auth/verify` – email verification flow (token logged for demo)
+- `GET /api/auth/google/start` / `GET /api/auth/google/callback` – Google OAuth popup flow
+- `POST /api/auth/change-password` – requires `Authorization: Bearer`
+- `PUT /api/auth/profile` / `GET /api/auth/me` – profile management
+- `GET /api/dashboard` – dashboard widgets
+- `GET /api/dashboard/admin-metrics` – admin-only sample
+- `GET /api/admin/users` + `PATCH /api/admin/users/:id/status` – user management (admin)
+
+## Tooling
+
+- ESLint + Prettier configured for frontend and backend.
+- Husky pre-commit running `lint-staged` (`frontend` and `backend` linters).
+- Jest scaffolding present from Nest; add domain tests as features grow.
+
+## Deployment Notes
+
+- Backend: supply `DATABASE_URL` and secrets via environment; enable SSL for managed Postgres.
+- Frontend: set `VITE_API_URL` to deployed backend. Any static host (Netlify/Vercel) works.
+- Live URL placeholder: _add Netlify/Vercel/Railway link after deployment_.
+
+## Security Considerations
+
+- Refresh tokens are hashed before storage; access tokens are short-lived.
+- Lockout after 5 failed logins; errors are generic to avoid user enumeration.
+- Password reset uses single-use JWT demo; move to Redis-backed tokens + real email in production.
+
+## Scripts
+
+- `npm run lint` (root) – runs both frontend/backend linters
+- `npm run start:dev` (backend) – watch mode API
+- `npm run dev` (frontend) – Vite dev server
+
+See `NEXT_STEPS.md` for the prioritized backlog toward the final project.

@@ -1,0 +1,24 @@
+{
+  "name": "bus_ticket_booking",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "prepare": "husky install",
+    "lint": "npm run lint --prefix frontend && npm run lint --prefix backend",
+    "format": "prettier --write \"**/*.{js,ts,tsx,md,json}\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.6.2"
+  },
+  "lint-staged": {
+    "frontend/**/*.{ts,tsx,js,jsx}": "cd frontend && npm run lint -- --max-warnings=0",
+    "backend/src/**/*.ts": "cd backend && npm run lint -- --max-warnings=0"
+  }
+}

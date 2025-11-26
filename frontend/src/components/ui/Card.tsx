@@ -1,4 +1,4 @@
-import { PropsWithChildren, ReactNode } from 'react';
+import type { PropsWithChildren, ReactNode } from 'react';
 import clsx from 'clsx';
 
 type CardProps = PropsWithChildren<{ title?: string; actions?: ReactNode; className?: string }>;

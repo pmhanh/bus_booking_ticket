@@ -1,5 +1,6 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { PropsWithChildren, useState } from 'react';
+import type { PropsWithChildren } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../ui/Button';
 import clsx from 'clsx';

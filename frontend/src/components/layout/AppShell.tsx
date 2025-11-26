@@ -20,8 +20,8 @@ export const AppShell = ({ children }: PropsWithChildren) => {
         </Link>
         {user ? (
           <nav className="flex items-center gap-4 text-sm uppercase tracking-wide">
-            <NavItem to="/dashboard" label="Dashboard" />
-            <NavItem to="/profile" label="Profile" />
+            {user.role !== 'admin' ? <NavItem to="/" label="Home" /> : null}
+            {user.role === 'admin' ? <NavItem to="/dashboard" label="Dashboard" /> : null}
             {user.role === 'admin' && <NavItem to="/admin/users" label="Admin" />}
           </nav>
         ) : (

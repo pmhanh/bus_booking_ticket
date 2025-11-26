@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+﻿import { FormEvent, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -11,24 +11,46 @@ export const LoginPage = () => {
   const [form, setForm] = useState({ email: '', password: '', remember: true });
   const [error, setError] = useState('');
 
+  const friendlyLabel = (raw: string) => {
+    const normalized = raw.toLowerCase();
+    if (normalized.includes('invalid credential')) {
+      return 'Email hoặc mật khẩu chưa chính xác. Vui lòng thử lại.';
+    }
+    return raw;
+  };
+
+  const parseErrorMessage = (err: unknown) => {
+    const fallback = (err as Error)?.message || 'Đã có lỗi xảy ra';
+    try {
+      const parsed = JSON.parse(fallback) as { message?: string | string[] };
+      if (Array.isArray(parsed.message)) return friendlyLabel(parsed.message.join(', '));
+      if (parsed.message) return friendlyLabel(parsed.message);
+    } catch {
+      // ignore parse issues
+    }
+    return friendlyLabel(fallback);
+  };
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     try {
-      await login(form.email, form.password, form.remember);
-      navigate('/dashboard');
+      const loggedInUser = await login(form.email, form.password, form.remember);
+      navigate(loggedInUser.role === 'admin' ? '/dashboard' : '/profile');
     } catch (err) {
-      setError((err as Error).message || 'Login failed');
+      const message = parseErrorMessage(err) || 'Login failed';
+      setError(message);
     }
   };
 
   const handleGoogle = async () => {
     setError('');
     try {
-      await googleLogin();
-      navigate('/dashboard');
+      const socialUser = await googleLogin();
+      navigate(socialUser.role === 'admin' ? '/dashboard' : '/profile');
     } catch (err) {
-      setError((err as Error).message || 'Google sign-in failed');
+      const message = parseErrorMessage(err) || 'Google sign-in failed';
+      setError(message);
     }
   };
 
@@ -78,8 +100,7 @@ export const LoginPage = () => {
             Forgot password?
           </Link>
         </div>
-        <div className="mt-2 text-xs text-gray-400">
-        </div>
+        <div className="mt-2 text-xs text-gray-400"></div>
       </Card>
     </div>
   );

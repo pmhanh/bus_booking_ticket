@@ -13,6 +13,7 @@ export const ResetPasswordPage = () => {
   const [confirm, setConfirm] = useState('');
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
+  const passwordRule = /^(?=.*[a-z])(?=.*[A-Z]).{8,}$/;
 
   useEffect(() => {
     const t = params.get('token');
@@ -24,6 +25,10 @@ export const ResetPasswordPage = () => {
     setError('');
     if (password !== confirm) {
       setError('Passwords do not match');
+      return;
+    }
+    if (!passwordRule.test(password)) {
+      setError('Password must be at least 8 chars, include uppercase and lowercase letters.');
       return;
     }
     await apiClient('/auth/reset', {

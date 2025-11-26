@@ -2,14 +2,22 @@ import { Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { DashboardPage } from './pages/DashboardPage';
+import { UserHomePage } from './pages/UserHomePage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { ProfilePage } from './pages/ProfilePage';
-import { AdminUsersPage } from './pages/AdminUsersPage';
 import { VerifyPage } from './pages/VerifyPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { AdminUsersPage } from './pages/AdminUsersPage';
+import { useAuth } from './context/AuthContext';
+
+const HomeRouter = () => {
+  const { user } = useAuth();
+  if (user?.role === 'admin') return <DashboardPage />;
+  return <UserHomePage />;
+};
 
 function App() {
   return (
@@ -22,12 +30,13 @@ function App() {
         <Route path="/verify" element={<VerifyPage />} />
 
         <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/" element={<HomeRouter />} />
+          <Route path="/home" element={<HomeRouter />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route element={<ProtectedRoute role="admin" />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
         </Route>
       </Routes>

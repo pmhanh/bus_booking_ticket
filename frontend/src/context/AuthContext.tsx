@@ -13,11 +13,11 @@ type AuthContextValue = {
   user: User | null;
   accessToken: string | null;
   loading: boolean;
-  login: (email: string, password: string, remember?: boolean) => Promise<void>;
+  login: (email: string, password: string, remember?: boolean) => Promise<User>;
   register: (payload: { email: string; password: string; fullName?: string }) => Promise<string | undefined>;
   logout: () => void;
   refresh: () => Promise<void>;
-  googleLogin: () => Promise<void>;
+  googleLogin: () => Promise<User>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -76,6 +76,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     setAccessToken(bundle.accessToken);
     setUser(res.user);
     setLoading(false);
+    return res.user;
   };
 
   const register = async (payload: { email: string; password: string; fullName?: string }) => {
@@ -109,7 +110,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     );
     if (!popup) throw new Error('Popup blocked. Please allow popups for this site.');
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<User>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         window.removeEventListener('message', handler);
         popup.close();
@@ -133,7 +134,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
         };
         persistTokens(bundle);
         setUser(data.payload.user);
-        resolve();
+        resolve(data.payload.user);
       };
 
       window.addEventListener('message', handler);

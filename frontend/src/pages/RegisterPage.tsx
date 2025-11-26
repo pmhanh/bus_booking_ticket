@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+﻿import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -11,17 +11,36 @@ export const RegisterPage = () => {
   const [form, setForm] = useState({ fullName: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  const passwordRule = /^(?=.*[a-z])(?=.*[A-Z]).{8,}$/;
+
+  const parseErrorMessage = (err: unknown) => {
+    const fallback = (err as Error)?.message || 'Đã có lỗi xảy ra';
+    try {
+      const parsed = JSON.parse(fallback) as { message?: string | string[] };
+      if (Array.isArray(parsed.message)) return parsed.message.join(', ');
+      if (parsed.message) return parsed.message;
+    } catch {
+      // ignore parse issues
+    }
+    return fallback;
+  };
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setInfo('');
+    if (!passwordRule.test(form.password)) {
+      setError('Mật khẩu cần tối thiểu 8 ký tự, có ít nhất 1 chữ thường và 1 chữ in hoa.');
+      return;
+    }
     try {
       const message = await register(form);
-      setInfo(message || 'Verification email sent. Please check your inbox.');
+      const successMessage = message || 'Verification email sent. Please check your inbox.';
+      setInfo(successMessage);
       setTimeout(() => navigate('/login'), 1200);
     } catch (err) {
-      setError((err as Error).message || 'Registration failed');
+      const message = parseErrorMessage(err) || 'Registration failed';
+      setError(message);
     }
   };
 

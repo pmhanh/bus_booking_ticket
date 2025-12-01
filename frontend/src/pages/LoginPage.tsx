@@ -15,13 +15,13 @@ export const LoginPage = () => {
   const friendlyLabel = (raw: string) => {
     const normalized = raw.toLowerCase();
     if (normalized.includes('invalid credential')) {
-      return 'Email ho?c m?t kh?u chua ch�nh x�c. Vui l�ng th? l?i.';
+      return 'Email hoặc mật khẩu chưa chính xác. Vui lòng thử lại.';
     }
     return raw;
   };
 
   const parseErrorMessage = (err: unknown) => {
-    const fallback = (err as Error)?.message || '�� c� l?i x?y ra';
+    const fallback = (err as Error)?.message || 'Đã có lỗi xảy ra';
     try {
       const parsed = JSON.parse(fallback) as { message?: string | string[] };
       if (Array.isArray(parsed.message)) return friendlyLabel(parsed.message.join(', '));

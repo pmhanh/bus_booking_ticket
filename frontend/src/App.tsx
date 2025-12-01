@@ -12,6 +12,9 @@ import { VerifyPage } from './pages/VerifyPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
 import { useAuth } from './context/AuthContext';
+import { TripsPage } from './pages/admin/TripsPage';
+import { RoutesPage } from './pages/admin/RoutesPage';
+import { SeatMapsPage } from './pages/admin/SeatMapsPage';
 
 const HomeRouter = () => {
   const { user } = useAuth();
@@ -38,6 +41,9 @@ function App() {
         <Route element={<ProtectedRoute role="admin" />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/trips" element={<TripsPage />} />
+          <Route path="/admin/routes" element={<RoutesPage />} />
+          <Route path="/admin/seat-maps" element={<SeatMapsPage />} />
         </Route>
       </Routes>
     </AppShell>

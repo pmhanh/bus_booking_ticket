@@ -15,7 +15,7 @@ export const RegisterPage = () => {
   const passwordRule = /^(?=.*[a-z])(?=.*[A-Z]).{8,}$/;
 
   const parseErrorMessage = (err: unknown) => {
-    const fallback = (err as Error)?.message || '�� c� l?i x?y ra';
+    const fallback = (err as Error)?.message || 'Đã có lỗi xảy ra';
     try {
       const parsed = JSON.parse(fallback) as { message?: string | string[] };
       if (Array.isArray(parsed.message)) return parsed.message.join(', ');
@@ -31,7 +31,7 @@ export const RegisterPage = () => {
     setError('');
     setInfo('');
     if (!passwordRule.test(form.password)) {
-      setError('M?t kh?u c?n t?i thi?u 8 k� t?, c� �t nh?t 1 ch? thu?ng v� 1 ch? in hoa.');
+      setError('Mật khẩu cần tối thiểu 8 ký tự, có ít nhất 1 chữ thường và 1 chữ in hoa.');
       return;
     }
     try {

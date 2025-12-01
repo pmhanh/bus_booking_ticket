@@ -20,10 +20,13 @@ export const AppShell = ({ children }: PropsWithChildren) => {
           <span>BusTicket One</span>
         </Link>
         {user ? (
-          <nav className="flex items-center gap-4 text-sm uppercase tracking-wide">
+          <nav className="flex items-center gap-3 text-sm uppercase tracking-wide">
             {user.role !== 'admin' ? <NavItem to="/" label="Home" /> : null}
             {user.role === 'admin' ? <NavItem to="/dashboard" label="Dashboard" /> : null}
-            {user.role === 'admin' && <NavItem to="/admin/users" label="Admin" />}
+            {user.role === 'admin' ? <NavItem to="/admin/trips" label="Trips" /> : null}
+            {user.role === 'admin' ? <NavItem to="/admin/routes" label="Routes" /> : null}
+            {user.role === 'admin' ? <NavItem to="/admin/seat-maps" label="Seat maps" /> : null}
+            {user.role === 'admin' && <NavItem to="/admin/users" label="Users" />}
           </nav>
         ) : (
           <div />

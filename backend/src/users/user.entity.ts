@@ -41,8 +41,8 @@ export class User {
   @Column({ default: false })
   verified: boolean;
 
-  @Column({ nullable: true })
-  refreshTokenHash?: string;
+  @Column({ type: 'text', nullable: true })
+  refreshTokenHash?: string | null;
 
   @Column({ default: 0 })
   failedLoginAttempts: number;

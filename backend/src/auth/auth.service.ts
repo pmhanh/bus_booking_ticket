@@ -152,12 +152,20 @@ export class AuthService {
   }
 
   async refresh(userId: string, refreshToken: string) {
-    const user = await this.usersService.findById(userId);
-    if (!user || !user.refreshTokenHash) throw new UnauthorizedException();
-    const match = await bcrypt.compare(refreshToken, user.refreshTokenHash);
-    if (!match) throw new UnauthorizedException();
-    const payload: JwtPayload = { sub: user.id, email: user.email, role: user.role };
-    return this.signTokens(payload);
+    try {
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
+        secret: this.configService.get('JWT_REFRESH_SECRET') || 'refresh-secret',
+      });
+      // bảo vệ: id trong token phải khớp với input và với bản ghi DB
+      if (userId && payload.sub !== userId) throw new UnauthorizedException();
+      const user = await this.usersService.findById(payload.sub);
+      if (!user || !user.refreshTokenHash) throw new UnauthorizedException();
+      const match = await bcrypt.compare(refreshToken, user.refreshTokenHash);
+      if (!match) throw new UnauthorizedException();
+      return this.signTokens({ sub: user.id, email: user.email, role: user.role });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {

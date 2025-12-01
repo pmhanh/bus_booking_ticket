@@ -54,7 +54,7 @@ export class UsersService {
   }
 
   async clearRefreshToken(userId: string) {
-    await this.repo.update(userId, { refreshTokenHash: undefined });
+    await this.repo.update(userId, { refreshTokenHash: null });
   }
 
   async updateFailedAttempts(userId: string, attempts: number, lockedUntil?: Date | null) {

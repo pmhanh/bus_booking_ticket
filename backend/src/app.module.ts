@@ -7,6 +7,18 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { User } from './users/user.entity';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { City } from './cities/city.entity';
+import { Route } from './routes/route.entity';
+import { RouteStop } from './routes/route-stop.entity';
+import { SeatMap } from './seat-maps/seat-map.entity';
+import { SeatDefinition } from './seat-maps/seat-definition.entity';
+import { Bus } from './buses/bus.entity';
+import { Trip } from './trips/trip.entity';
+import { CitiesModule } from './cities/cities.module';
+import { RoutesModule } from './routes/routes.module';
+import { SeatMapsModule } from './seat-maps/seat-maps.module';
+import { BusesModule } from './buses/buses.module';
+import { TripsModule } from './trips/trips.module';
 
 @Module({
   imports: [
@@ -22,7 +34,7 @@ import { AppService } from './app.service';
         return {
           type: 'postgres',
           url,
-          entities: [User],
+          entities: [User, City, Route, RouteStop, SeatMap, SeatDefinition, Bus, Trip],
           synchronize: true,
         };
       },
@@ -30,6 +42,11 @@ import { AppService } from './app.service';
     UsersModule,
     AuthModule,
     DashboardModule,
+    CitiesModule,
+    RoutesModule,
+    SeatMapsModule,
+    BusesModule,
+    TripsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

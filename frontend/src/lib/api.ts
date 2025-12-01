@@ -11,8 +11,14 @@ export async function apiClient<T>(path: string, options: RequestInit = {}): Pro
     headers,
   });
   if (!res.ok) {
-    const message = await res.text();
-    throw new Error(message || res.statusText);
+    const text = await res.text();
+    try {
+      const json = JSON.parse(text) as { message?: string | string[] };
+      const msg = Array.isArray(json.message) ? json.message.join(', ') : json.message || text;
+      throw new Error(msg);
+    } catch {
+      throw new Error(text || res.statusText);
+    }
   }
   return res.json() as Promise<T>;
 }

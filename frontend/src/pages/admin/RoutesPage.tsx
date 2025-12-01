@@ -292,7 +292,10 @@ export const RoutesPage = () => {
         <Card title={`Điểm dừng cho tuyến #${stopsRouteId}`}>
           <div className="space-y-3">
             {stopsDraft.map((s, idx) => (
-              <div key={idx} className="grid md:grid-cols-4 gap-2 items-end">
+              <div
+                key={idx}
+                className="grid md:grid-cols-[2.2fr_1.2fr_0.6fr_0.6fr] gap-3 items-end"
+              >
                 <label className="block text-sm text-gray-200">
                   <div className="mb-1 font-medium">Thành phố</div>
                   <select
@@ -335,6 +338,7 @@ export const RoutesPage = () => {
                   label="Thứ tự"
                   type="number"
                   value={s.order}
+                  className="w-full"
                   onChange={(e) =>
                     setStopsDraft((prev) =>
                       prev.map((item, i) => (i === idx ? { ...item, order: Number(e.target.value) } : item)),
@@ -345,6 +349,7 @@ export const RoutesPage = () => {
                   label="Offset (phút)"
                   type="number"
                   value={s.estimatedOffsetMinutes}
+                  className="w-full"
                   onChange={(e) =>
                     setStopsDraft((prev) =>
                       prev.map((item, i) =>

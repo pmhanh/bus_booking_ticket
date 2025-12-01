@@ -38,6 +38,7 @@ export const TripsPage = () => {
     originCityId?: number | '';
     destinationCityId?: number | '';
   }>({});
+  const [apiMessage, setApiMessage] = useState('');
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
 
@@ -104,6 +105,7 @@ export const TripsPage = () => {
 
   const submitTrip = async () => {
     setError('');
+    setApiMessage('');
     if (!form.routeId || !form.busId || !form.departureTime || !form.arrivalTime || !form.basePrice) {
       setError('Vui lòng nhập đủ thông tin chuyến.');
       return;
@@ -132,7 +134,7 @@ export const TripsPage = () => {
       resetForm();
       loadTrips();
     } catch (err) {
-      setError((err as Error).message);
+      setApiMessage((err as Error).message || 'Không thể lưu chuyến');
     }
   };
 
@@ -214,6 +216,11 @@ export const TripsPage = () => {
           />
         </div>
         {error ? <div className="text-error text-sm mt-2">{error}</div> : null}
+        {apiMessage ? (
+          <div className="mt-2 rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
+            {apiMessage}
+          </div>
+        ) : null}
         <div className="mt-4 flex gap-2">
           <Button onClick={submitTrip}>{form.id ? 'Lưu' : 'Tạo chuyến'}</Button>
           {form.id ? (
@@ -324,14 +331,14 @@ export const TripsPage = () => {
           {trips.map((t) => (
             <div key={t.id} className="grid grid-cols-6 gap-3 py-2 items-center">
               <div>
-                <div className="text-white font-semibold">{t.route.name}</div>
+                <div className="text-white font-semibold">{t.route?.name || '-'}</div>
                 <div className="text-xs text-gray-400">
-                  {t.route.originCity.name} → {t.route.destinationCity.name}
+                  {t.route?.originCity?.name ?? '?'} → {t.route?.destinationCity?.name ?? '?'}
                 </div>
               </div>
               <div>
-                <div className="text-white">{t.bus.name}</div>
-                <div className="text-xs text-gray-400">{t.bus.plateNumber}</div>
+                <div className="text-white">{t.bus?.name || '-'}</div>
+                <div className="text-xs text-gray-400">{t.bus?.plateNumber || ''}</div>
               </div>
               <div className="text-xs text-gray-200">{new Date(t.departureTime).toLocaleString()}</div>
               <div className="text-xs text-gray-200">{new Date(t.arrivalTime).toLocaleString()}</div>

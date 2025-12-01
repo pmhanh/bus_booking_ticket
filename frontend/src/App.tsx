@@ -15,6 +15,7 @@ import { useAuth } from './context/AuthContext';
 import { TripsPage } from './pages/admin/TripsPage';
 import { RoutesPage } from './pages/admin/RoutesPage';
 import { SeatMapsPage } from './pages/admin/SeatMapsPage';
+import { HomePage } from './pages/HomePage';
 
 const HomeRouter = () => {
   const { user } = useAuth();
@@ -26,6 +27,8 @@ function App() {
   return (
     <AppShell>
       <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/home" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot" element={<ForgotPasswordPage />} />
@@ -33,8 +36,6 @@ function App() {
         <Route path="/verify" element={<VerifyPage />} />
 
         <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<HomeRouter />} />
-          <Route path="/home" element={<HomeRouter />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

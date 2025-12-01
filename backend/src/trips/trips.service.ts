@@ -63,6 +63,8 @@ export class TripsService {
     const qb = this.tripRepo
       .createQueryBuilder('trip')
       .leftJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('route.originCity', 'originCity')
+      .leftJoinAndSelect('route.destinationCity', 'destinationCity')
       .leftJoinAndSelect('trip.bus', 'bus')
       .orderBy('trip.departureTime', 'DESC');
     if (filter?.routeId) qb.andWhere('route.id = :rid', { rid: filter.routeId });
@@ -83,7 +85,10 @@ export class TripsService {
   }
 
   async findById(id: number) {
-    const trip = await this.tripRepo.findOne({ where: { id } });
+    const trip = await this.tripRepo.findOne({
+      where: { id },
+      relations: ['route', 'route.originCity', 'route.destinationCity', 'bus'],
+    });
     if (!trip) throw new NotFoundException('Trip not found');
     return trip;
   }

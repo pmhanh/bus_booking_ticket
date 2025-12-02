@@ -1,4 +1,12 @@
-import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class SeatDto {
   @IsString()

@@ -85,7 +85,8 @@ export class AuthController {
   @Get('google/callback')
   async googleCallback(@Query('code') code: string, @Res() res: Response) {
     const result = await this.authService.handleGoogleOAuthCode(code);
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const payload = encodeURIComponent(JSON.stringify(result));
     const html = `<script>
       const data = JSON.parse(decodeURIComponent('${payload}'));
@@ -102,7 +103,10 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
-  changePassword(@CurrentUser() user: JwtPayload, @Body() dto: ChangePasswordDto) {
+  changePassword(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: ChangePasswordDto,
+  ) {
     return this.authService.changePassword(user.sub, dto);
   }
 
@@ -114,7 +118,10 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Put('profile')
-  updateProfile(@CurrentUser() user: JwtPayload, @Body() dto: UpdateProfileDto) {
+  updateProfile(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateProfileDto,
+  ) {
     return this.usersService.updateProfile(user.sub, dto);
   }
 }

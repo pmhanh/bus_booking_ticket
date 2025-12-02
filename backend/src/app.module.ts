@@ -34,7 +34,16 @@ import { TripsModule } from './trips/trips.module';
         return {
           type: 'postgres',
           url,
-          entities: [User, City, Route, RouteStop, SeatMap, SeatDefinition, Bus, Trip],
+          entities: [
+            User,
+            City,
+            Route,
+            RouteStop,
+            SeatMap,
+            SeatDefinition,
+            Bus,
+            Trip,
+          ],
           synchronize: true,
         };
       },

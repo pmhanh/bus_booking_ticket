@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { FormField } from '../../components/ui/FormField';
@@ -41,17 +41,21 @@ export const RoutesPage = () => {
     [accessToken],
   );
 
-  const loadCities = () =>
-    apiClient<City[]>('/admin/cities', { headers }).then(setCities);
+  const loadCities = useCallback(
+    () => apiClient<City[]>('/admin/cities', { headers }).then(setCities),
+    [headers],
+  );
 
-  const loadRoutes = () =>
-    apiClient<Route[]>('/admin/routes', { headers }).then(setRoutes);
+  const loadRoutes = useCallback(
+    () => apiClient<Route[]>('/admin/routes', { headers }).then(setRoutes),
+    [headers],
+  );
 
   useEffect(() => {
     if (!accessToken) return;
     loadCities();
     loadRoutes();
-  }, [accessToken]);
+  }, [accessToken, loadCities, loadRoutes]);
   const autoName = (originId?: number | '', destId?: number | '') => {
     if (!originId || !destId) return '';
     const origin = cities.find((c) => c.id === originId);

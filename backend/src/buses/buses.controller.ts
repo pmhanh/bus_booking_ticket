@@ -43,7 +43,10 @@ export class BusesController {
   }
 
   @Patch(':id/seat-map')
-  updateSeatMap(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateBusSeatMapDto) {
+  updateSeatMap(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateBusSeatMapDto,
+  ) {
     return this.busesService.updateSeatMap(id, dto);
   }
 }

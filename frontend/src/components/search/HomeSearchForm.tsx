@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
-import { searchCities } from '../../api/cities';
-import type { CityOption } from '../../api/cities';
+import { searchCities, type CityOption } from '../../api/cities';
 
 type HomeSearchFormProps = {
   onSubmit?: (params: { originId: number; destinationId: number; date: string }) => void;
+  initialOrigin?: { id: number; name: string };
+  initialDestination?: { id: number; name: string };
+  initialDate?: string;
 };
 
 type AutocompleteState = {
@@ -42,6 +44,16 @@ const useCityAutocomplete = () => {
     return () => clearTimeout(handle);
   }, [state.query]);
 
+  const loadPopular = useCallback(async () => {
+    setState((prev) => ({ ...prev, loading: true, open: true }));
+    try {
+      const opts = await searchCities('', 10);
+      setState((prev) => ({ ...prev, options: opts, loading: false, open: true }));
+    } catch {
+      setState((prev) => ({ ...prev, loading: false }));
+    }
+  }, []);
+
   const select = (opt: CityOption) => {
     setState((prev) => ({
       ...prev,
@@ -57,16 +69,29 @@ const useCityAutocomplete = () => {
     state,
     setQuery,
     select,
-    setOpen: (open: boolean) => setState((prev) => ({ ...prev, open })),
+    setOpen: (open: boolean) => {
+      setState((prev) => ({ ...prev, open }));
+      if (open && !state.query && !state.options.length) {
+        void loadPopular();
+      }
+    },
+    close: () => setState((prev) => ({ ...prev, open: false })),
   };
 };
 
-export const HomeSearchForm = ({ onSubmit }: HomeSearchFormProps) => {
+export const HomeSearchForm = ({
+  onSubmit,
+  initialOrigin,
+  initialDestination,
+  initialDate,
+}: HomeSearchFormProps) => {
   const navigate = useNavigate();
   const origin = useCityAutocomplete();
   const destination = useCityAutocomplete();
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(initialDate || '');
   const [error, setError] = useState('');
+  const originRef = useRef<HTMLDivElement>(null);
+  const destinationRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,19 +109,60 @@ export const HomeSearchForm = ({ onSubmit }: HomeSearchFormProps) => {
     }
   };
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && !originRef.current?.contains(target)) origin.close();
+      if (target && !destinationRef.current?.contains(target)) destination.close();
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [origin, destination]);
+
+  useEffect(() => {
+    if (initialOrigin) {
+      origin.select({ id: initialOrigin.id, name: initialOrigin.name, code: 0, slug: '' });
+    }
+    if (initialDestination) {
+      destination.select({
+        id: initialDestination.id,
+        name: initialDestination.name,
+        code: 0,
+        slug: '',
+      });
+    }
+    if (initialDate) setDate(initialDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOrigin?.id, initialDestination?.id, initialDate]);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid md:grid-cols-3 gap-3">
-        <div className="relative">
+      <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
+        <div className="relative" ref={originRef}>
           <label className="block text-sm font-medium text-gray-200 mb-1">Điểm đi</label>
-          <input
-            className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            value={origin.state.query}
-            onChange={(e) => origin.setQuery(e.target.value)}
-            onFocus={() => origin.setOpen(true)}
-            placeholder="Chọn điểm xuất phát"
-          />
-          {origin.state.open && origin.state.options.length > 0 ? (
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-300">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.6}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 19l19-7-19-7 5 7-5 7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12h1.5" />
+              </svg>
+            </span>
+            <input
+              className="w-full pl-10 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              value={origin.state.query}
+              onChange={(e) => origin.setQuery(e.target.value)}
+              onFocus={() => origin.setOpen(true)}
+              placeholder="Thành phố xuất phát"
+            />
+          </div>
+          {origin.state.open && origin.state.options.length > 0 && (
             <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
               {origin.state.options.map((opt) => (
                 <div
@@ -108,45 +174,78 @@ export const HomeSearchForm = ({ onSubmit }: HomeSearchFormProps) => {
                 </div>
               ))}
             </div>
-          ) : null}
+          )}
         </div>
 
-        <div className="relative">
+        <div className="relative" ref={destinationRef}>
           <label className="block text-sm font-medium text-gray-200 mb-1">Điểm đến</label>
-          <input
-            className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            value={destination.state.query}
-            onChange={(e) => destination.setQuery(e.target.value)}
-            onFocus={() => destination.setOpen(true)}
-            placeholder="Chọn điểm đến"
-          />
-          {destination.state.open && destination.state.options.length > 0 ? (
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-300">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.6}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 10v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10 12 3l9 7" />
+              </svg>
+            </span>
+            <input
+              className="w-full pl-10 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              value={destination.state.query}
+              onChange={(e) => destination.setQuery(e.target.value)}
+              onFocus={() => destination.setOpen(true)}
+              placeholder="Thành phố muốn đến"
+            />
+          </div>
+          {destination.state.open && destination.state.options.length > 0 && (
             <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
               {destination.state.options.map((opt) => (
                 <div
                   key={opt.id}
-                  className="px-3 py-2 text-sm text-gray-100 hover:bg-emerald-500/20 cursor-pointer"
+                  className="px-3 py-2 text-sm text-gray-100 hover:bg-sky-500/20 cursor-pointer"
                   onClick={() => destination.select(opt)}
                 >
                   {opt.name}
                 </div>
               ))}
             </div>
-          ) : null}
+          )}
         </div>
 
-        <div>
+        <div className="relative">
           <label className="block text-sm font-medium text-gray-200 mb-1">Ngày khởi hành</label>
-          <input
-            type="date"
-            className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-300">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.6}
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 2v4M8 2v4M3 10h18" />
+              </svg>
+            </span>
+            <input
+              type="date"
+              className="w-full appearance-none pl-10 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </div>
         </div>
-      </div>
-      <div className="flex justify-end">
-        <Button type="submit">Tìm chuyến xe</Button>
+
+        <div className="md:flex md:justify-end">
+          <Button type="submit" className="w-full md:w-auto">
+            Tìm chuyến
+          </Button>
+        </div>
       </div>
       {error ? <div className="text-sm text-red-400 mt-2">{error}</div> : null}
     </form>

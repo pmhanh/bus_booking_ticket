@@ -18,7 +18,7 @@
     "prettier": "^3.6.2"
   },
   "lint-staged": {
-    "frontend/**/*.{ts,tsx,js,jsx}": "cd frontend && npm run lint -- --max-warnings=0",
-    "backend/src/**/*.ts": "cd backend && npm run lint -- --max-warnings=0"
+    "frontend/**/*.{ts,tsx,js,jsx}": "npm --prefix frontend run lint -- --max-warnings=0",
+    "backend/src/**/*.ts": "npm --prefix backend run lint -- --max-warnings=0"
   }
 }

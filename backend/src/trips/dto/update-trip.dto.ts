@@ -1,4 +1,10 @@
-import { IsDateString, IsIn, IsInt, IsOptional, IsPositive } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsPositive,
+} from 'class-validator';
 
 export class UpdateTripDto {
   @IsOptional()

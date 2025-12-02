@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from 'react';
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { apiClient } from '../lib/api';
 import type { User } from '../types/user';
 
@@ -140,14 +140,12 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     setUser(null);
   };
 
-  const value = useMemo(
-    () => ({ user, accessToken, loading, login, register, logout, refresh, googleLogin }),
-    [user, accessToken, loading],
-  );
+  const value = { user, accessToken, loading, login, register, logout, refresh, googleLogin };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider');

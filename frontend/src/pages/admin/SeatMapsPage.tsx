@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { FormField } from '../../components/ui/FormField';
@@ -28,53 +28,86 @@ export const SeatMapsPage = () => {
   const [selectedCell, setSelectedCell] = useState<SeatCell | null>(null);
   const headers = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
 
-  const makeCells = (r: number, c: number, seats?: SeatMap['seats']) => {
-    const lookup = new Map<string, { code: string; price: number; isActive: boolean }>();
-    seats?.forEach((s) => lookup.set(`${s.row}-${s.col}`, { code: s.code, price: s.price, isActive: s.isActive }));
-    const next: SeatCell[] = [];
-    for (let i = 1; i <= r; i++) {
-      for (let j = 1; j <= c; j++) {
-        const key = `${i}-${j}`;
-        const found = lookup.get(key);
-        next.push({
-          row: i,
-          col: j,
-          isSeat: !!found,
-          code: found?.code ?? `${i}${colLetter(j)}`,
-          price: found?.price ?? basePrice,
-        });
+  const makeCells = useCallback(
+    (r: number, c: number, seats?: SeatMap['seats']) => {
+      const lookup = new Map<string, { code: string; price: number; isActive: boolean }>();
+      seats?.forEach((s) =>
+        lookup.set(`${s.row}-${s.col}`, { code: s.code, price: s.price, isActive: s.isActive }),
+      );
+      const next: SeatCell[] = [];
+      for (let i = 1; i <= r; i++) {
+        for (let j = 1; j <= c; j++) {
+          const key = `${i}-${j}`;
+          const found = lookup.get(key);
+          next.push({
+            row: i,
+            col: j,
+            isSeat: !!found,
+            code: found?.code ?? `${i}${colLetter(j)}`,
+            price: found?.price ?? basePrice,
+          });
+        }
       }
-    }
-    setCells(next);
-  };
+      setCells(next);
+    },
+    [basePrice],
+  );
 
-  const loadSeatMaps = () => apiClient<SeatMap[]>('/admin/seat-maps', { headers }).then(setSeatMaps);
+  const loadSeatMaps = useCallback(
+    () => apiClient<SeatMap[]>('/admin/seat-maps', { headers }).then(setSeatMaps),
+    [headers],
+  );
 
-  const loadSeatMapDetail = async (id: number) => {
-    const map = await apiClient<SeatMap>(`/admin/seat-maps/${id}`, { headers });
-    setSelectedId(id);
-    setName(map.name);
-    setRows(map.rows);
-    setCols(map.cols);
-    makeCells(map.rows, map.cols, map.seats);
-  };
+  const loadSeatMapDetail = useCallback(
+    async (id: number) => {
+      const map = await apiClient<SeatMap>(`/admin/seat-maps/${id}`, { headers });
+      setSelectedId(id);
+      setName(map.name);
+      setRows(map.rows);
+      setCols(map.cols);
+      makeCells(map.rows, map.cols, map.seats);
+    },
+    [headers, makeCells],
+  );
 
   useEffect(() => {
     if (!accessToken) return;
     loadSeatMaps();
     makeCells(rows, cols);
-  }, [accessToken]);
+  }, [accessToken, loadSeatMaps, makeCells, rows, cols]);
 
   useEffect(() => {
-    makeCells(rows, cols, selectedId ? cells.filter((c) => c.isSeat).map((s) => ({
-      code: s.code || `${s.row}${colLetter(s.col)}`,
-      row: s.row,
-      col: s.col,
-      price: s.price || basePrice,
-      isActive: true,
-    })) as unknown as SeatMap['seats'] : undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, cols]);
+    setCells((prev) => {
+      const seats = selectedId
+        ? prev
+            .filter((c) => c.isSeat)
+            .map((s) => ({
+              code: s.code || `${s.row}${colLetter(s.col)}`,
+              row: s.row,
+              col: s.col,
+              price: s.price || basePrice,
+              isActive: true,
+            })) as SeatMap['seats']
+        : undefined;
+      const lookup = new Map<string, { code: string; price: number; isActive: boolean }>();
+      seats?.forEach((s) => lookup.set(`${s.row}-${s.col}`, { code: s.code, price: s.price, isActive: s.isActive }));
+      const next: SeatCell[] = [];
+      for (let i = 1; i <= rows; i++) {
+        for (let j = 1; j <= cols; j++) {
+          const key = `${i}-${j}`;
+          const found = lookup.get(key);
+          next.push({
+            row: i,
+            col: j,
+            isSeat: !!found,
+            code: found?.code ?? `${i}${colLetter(j)}`,
+            price: found?.price ?? basePrice,
+          });
+        }
+      }
+      return next;
+    });
+  }, [rows, cols, selectedId, basePrice]);
 
   const toggleCell = (cell: SeatCell) => {
     setCells((prev) =>

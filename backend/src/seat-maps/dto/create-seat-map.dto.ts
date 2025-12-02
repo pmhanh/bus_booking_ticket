@@ -1,4 +1,11 @@
-import { ArrayNotEmpty, IsArray, IsInt, IsPositive, IsString, ValidateNested } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsInt,
+  IsPositive,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { SeatDto } from './seat.dto';
 

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -20,7 +28,10 @@ export class UsersController {
   }
 
   @Patch(':id/status')
-  setStatus(@Param('id') id: string, @Body() body: { status: 'active' | 'suspended' }) {
+  setStatus(
+    @Param('id') id: string,
+    @Body() body: { status: 'active' | 'suspended' },
+  ) {
     return this.usersService.updateStatus(id, body.status);
   }
 }

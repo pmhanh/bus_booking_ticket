@@ -57,8 +57,15 @@ export class UsersService {
     await this.repo.update(userId, { refreshTokenHash: null });
   }
 
-  async updateFailedAttempts(userId: string, attempts: number, lockedUntil?: Date | null) {
-    await this.repo.update(userId, { failedLoginAttempts: attempts, lockedUntil: lockedUntil ?? undefined });
+  async updateFailedAttempts(
+    userId: string,
+    attempts: number,
+    lockedUntil?: Date | null,
+  ) {
+    await this.repo.update(userId, {
+      failedLoginAttempts: attempts,
+      lockedUntil: lockedUntil ?? undefined,
+    });
   }
 
   async createFromProvider(email: string, profile: Partial<User>) {
@@ -85,8 +92,12 @@ export class UsersService {
   findAll(filter?: { role?: string; status?: string; search?: string }) {
     const qb = this.repo.createQueryBuilder('user');
     if (filter?.role) qb.andWhere('user.role = :role', { role: filter.role });
-    if (filter?.status) qb.andWhere('user.status = :status', { status: filter.status });
-    if (filter?.search) qb.andWhere('user.email ILIKE :s OR user.fullName ILIKE :s', { s: `%${filter.search}%` });
+    if (filter?.status)
+      qb.andWhere('user.status = :status', { status: filter.status });
+    if (filter?.search)
+      qb.andWhere('user.email ILIKE :s OR user.fullName ILIKE :s', {
+        s: `%${filter.search}%`,
+      });
     return qb.orderBy('user.createdAt', 'DESC').getMany();
   }
 

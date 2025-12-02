@@ -74,27 +74,39 @@ export class AuthService {
     if (existing) throw new BadRequestException('Email already registered');
     const user = await this.usersService.createLocal(dto);
     await this.sendVerification(user.email, user.id);
-    return { ok: true, message: 'Verification email sent. Please confirm to log in.', userId: user.id };
+    return {
+      ok: true,
+      message: 'Verification email sent. Please confirm to log in.',
+      userId: user.id,
+    };
   }
 
   async login(dto: LoginDto) {
     const user = await this.usersService.findByEmail(dto.email);
-    if (!user || !user.passwordHash) throw new UnauthorizedException('Invalid credentials');
-    if (!user.verified) throw new ForbiddenException('Please verify your email first.');
-    if (user.status === 'suspended') throw new ForbiddenException('Account suspended');
+    if (!user || !user.passwordHash)
+      throw new UnauthorizedException('Invalid credentials');
+    if (!user.verified)
+      throw new ForbiddenException('Please verify your email first.');
+    if (user.status === 'suspended')
+      throw new ForbiddenException('Account suspended');
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       throw new ForbiddenException('Account is temporarily locked');
     }
     const passwordOk = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordOk) {
       const attempts = user.failedLoginAttempts + 1;
-      const lock = attempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : undefined;
+      const lock =
+        attempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : undefined;
       await this.usersService.updateFailedAttempts(user.id, attempts, lock);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     await this.usersService.updateFailedAttempts(user.id, 0, undefined);
-    const tokens = await this.signTokens({ sub: user.id, email: user.email, role: user.role });
+    const tokens = await this.signTokens({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
     return { user, tokens };
   }
 
@@ -104,15 +116,21 @@ export class AuthService {
       audience: this.configService.get<string>('GOOGLE_CLIENT_ID'),
     });
     const payload = ticket.getPayload();
-    if (!payload?.email) throw new UnauthorizedException('Invalid Google token');
+    if (!payload?.email)
+      throw new UnauthorizedException('Invalid Google token');
     const user = await this.usersService.createFromProvider(payload.email, {
       fullName: payload.name,
       avatarUrl: payload.picture,
       provider: 'google',
       verified: payload.email_verified ?? true,
     });
-    if (user.status === 'suspended') throw new ForbiddenException('Account suspended');
-    const tokens = await this.signTokens({ sub: user.id, email: user.email, role: user.role });
+    if (user.status === 'suspended')
+      throw new ForbiddenException('Account suspended');
+    const tokens = await this.signTokens({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
     return { user, tokens };
   }
 
@@ -133,36 +151,48 @@ export class AuthService {
         audience: this.configService.get<string>('GOOGLE_CLIENT_ID'),
       });
       const payload = ticket.getPayload();
-      if (!payload?.email) throw new UnauthorizedException('Invalid Google token');
+      if (!payload?.email)
+        throw new UnauthorizedException('Invalid Google token');
       const user = await this.usersService.createFromProvider(payload.email, {
         fullName: payload.name,
         avatarUrl: payload.picture,
         provider: 'google',
         verified: payload.email_verified ?? true,
       });
-      const sessionTokens = await this.signTokens({ sub: user.id, email: user.email, role: user.role });
+      const sessionTokens = await this.signTokens({
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+      });
       return { user, tokens: sessionTokens };
     } catch (err) {
-      const reason =
-        (err as Error).message?.includes('redirect_uri_mismatch')
-          ? 'Google redirect_uri mismatch. Check GOOGLE_REDIRECT_URI in .env and OAuth console.'
-          : (err as Error).message;
+      const reason = (err as Error).message?.includes('redirect_uri_mismatch')
+        ? 'Google redirect_uri mismatch. Check GOOGLE_REDIRECT_URI in .env and OAuth console.'
+        : (err as Error).message;
       throw new UnauthorizedException(reason || 'Google login failed');
     }
   }
 
   async refresh(userId: string, refreshToken: string) {
     try {
-      const payload = await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
-        secret: this.configService.get('JWT_REFRESH_SECRET') || 'refresh-secret',
-      });
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(
+        refreshToken,
+        {
+          secret:
+            this.configService.get('JWT_REFRESH_SECRET') || 'refresh-secret',
+        },
+      );
       // bảo vệ: id trong token phải khớp với input và với bản ghi DB
       if (userId && payload.sub !== userId) throw new UnauthorizedException();
       const user = await this.usersService.findById(payload.sub);
       if (!user || !user.refreshTokenHash) throw new UnauthorizedException();
       const match = await bcrypt.compare(refreshToken, user.refreshTokenHash);
       if (!match) throw new UnauthorizedException();
-      return this.signTokens({ sub: user.id, email: user.email, role: user.role });
+      return this.signTokens({
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+      });
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -173,16 +203,22 @@ export class AuthService {
     if (!user) return { ok: true }; // do not leak
     const token = await this.jwtService.signAsync(
       { sub: user.id, email: user.email, kind: 'reset' },
-      { expiresIn: '1h', secret: this.configService.get('RESET_SECRET') || 'reset-secret' },
+      {
+        expiresIn: '1h',
+        secret: this.configService.get('RESET_SECRET') || 'reset-secret',
+      },
     );
-    const frontend = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+    const frontend =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const resetLink = `${frontend}/reset?token=${token}`;
 
     if (this.mailer) {
       try {
         await this.mailer.sendMail({
           to: user.email,
-          from: this.configService.get<string>('SMTP_FROM') || this.configService.get<string>('SMTP_USER'),
+          from:
+            this.configService.get<string>('SMTP_FROM') ||
+            this.configService.get<string>('SMTP_USER'),
           subject: 'Reset your password',
           html: `
             <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:16px;background:#f5f7fb;color:#1f2937;border-radius:12px;border:1px solid #e5e7eb;">
@@ -209,16 +245,22 @@ export class AuthService {
   private async sendVerification(email: string, userId: string) {
     const token = await this.jwtService.signAsync(
       { sub: userId, email, kind: 'verify' },
-      { expiresIn: '1h', secret: this.configService.get('VERIFY_SECRET') || 'verify-secret' },
+      {
+        expiresIn: '1h',
+        secret: this.configService.get('VERIFY_SECRET') || 'verify-secret',
+      },
     );
-    const frontend = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+    const frontend =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const verifyLink = `${frontend}/verify?token=${token}`;
 
     if (this.mailer) {
       try {
         await this.mailer.sendMail({
           to: email,
-          from: this.configService.get<string>('SMTP_FROM') || this.configService.get<string>('SMTP_USER'),
+          from:
+            this.configService.get<string>('SMTP_FROM') ||
+            this.configService.get<string>('SMTP_USER'),
           subject: 'Verify your email',
           html: `
             <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:16px;background:#f5f7fb;color:#1f2937;border-radius:12px;border:1px solid #e5e7eb;">
@@ -251,7 +293,10 @@ export class AuthService {
   }
 
   async verify(dto: VerifyEmailDto) {
-    const payload = await this.jwtService.verifyAsync<{ sub: string; kind: string }>(dto.token, {
+    const payload = await this.jwtService.verifyAsync<{
+      sub: string;
+      kind: string;
+    }>(dto.token, {
       secret: this.configService.get('VERIFY_SECRET') || 'verify-secret',
     });
     if (payload.kind !== 'verify') throw new UnauthorizedException();
@@ -262,12 +307,12 @@ export class AuthService {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    const payload = await this.jwtService.verifyAsync<{ sub: string; kind: string }>(
-      dto.token,
-      {
-        secret: this.configService.get('RESET_SECRET') || 'reset-secret',
-      },
-    );
+    const payload = await this.jwtService.verifyAsync<{
+      sub: string;
+      kind: string;
+    }>(dto.token, {
+      secret: this.configService.get('RESET_SECRET') || 'reset-secret',
+    });
     if (payload.kind !== 'reset') throw new UnauthorizedException();
     const user = await this.usersService.findById(payload.sub);
     if (!user) throw new UnauthorizedException();

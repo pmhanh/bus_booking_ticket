@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Route } from './route.entity';
@@ -12,20 +16,27 @@ import { City } from '../cities/city.entity';
 export class RoutesService {
   constructor(
     @InjectRepository(Route) private readonly routesRepo: Repository<Route>,
-    @InjectRepository(RouteStop) private readonly stopsRepo: Repository<RouteStop>,
+    @InjectRepository(RouteStop)
+    private readonly stopsRepo: Repository<RouteStop>,
     @InjectRepository(City) private readonly citiesRepo: Repository<City>,
   ) {}
 
   private async ensureCities(ids: number[]) {
     const cities = await this.citiesRepo.find({ where: { id: In(ids) } });
-    if (cities.length !== ids.length) throw new BadRequestException('City not found');
+    if (cities.length !== ids.length)
+      throw new BadRequestException('City not found');
     return cities;
   }
 
   async create(dto: CreateRouteDto) {
     if (dto.originCityId === dto.destinationCityId)
-      throw new BadRequestException('Điểm đi và điểm đến không được trùng nhau');
-    const [origin, destination] = await this.ensureCities([dto.originCityId, dto.destinationCityId]);
+      throw new BadRequestException(
+        'Điểm đi và điểm đến không được trùng nhau',
+      );
+    const [origin, destination] = await this.ensureCities([
+      dto.originCityId,
+      dto.destinationCityId,
+    ]);
     const route = this.routesRepo.create({
       name: dto.name,
       originCity: origin,
@@ -40,8 +51,10 @@ export class RoutesService {
       .createQueryBuilder('route')
       .leftJoinAndSelect('route.originCity', 'origin')
       .leftJoinAndSelect('route.destinationCity', 'destination');
-    if (filter?.originCityId) qb.andWhere('origin.id = :oid', { oid: filter.originCityId });
-    if (filter?.destinationCityId) qb.andWhere('destination.id = :did', { did: filter.destinationCityId });
+    if (filter?.originCityId)
+      qb.andWhere('origin.id = :oid', { oid: filter.originCityId });
+    if (filter?.destinationCityId)
+      qb.andWhere('destination.id = :did', { did: filter.destinationCityId });
     return qb.orderBy('route.id', 'DESC').getMany();
   }
 
@@ -58,17 +71,27 @@ export class RoutesService {
   async update(id: number, dto: UpdateRouteDto) {
     const route = await this.routesRepo.findOne({ where: { id } });
     if (!route) throw new NotFoundException('Route not found');
-    if (dto.originCityId && dto.destinationCityId && dto.originCityId === dto.destinationCityId)
-      throw new BadRequestException('Điểm đi và điểm đến không được trùng nhau');
+    if (
+      dto.originCityId &&
+      dto.destinationCityId &&
+      dto.originCityId === dto.destinationCityId
+    )
+      throw new BadRequestException(
+        'Điểm đi và điểm đến không được trùng nhau',
+      );
     if (dto.originCityId || dto.destinationCityId) {
-      const ids = [dto.originCityId, dto.destinationCityId].filter(Boolean) as number[];
+      const ids = [dto.originCityId, dto.destinationCityId].filter(
+        Boolean,
+      ) as number[];
       const cities = await this.ensureCities(ids);
       const map = new Map<number, City>(cities.map((c) => [c.id, c]));
       if (dto.originCityId) route.originCity = map.get(dto.originCityId)!;
-      if (dto.destinationCityId) route.destinationCity = map.get(dto.destinationCityId)!;
+      if (dto.destinationCityId)
+        route.destinationCity = map.get(dto.destinationCityId)!;
     }
     if (dto.name) route.name = dto.name;
-    if (dto.estimatedDurationMinutes) route.estimatedDurationMinutes = dto.estimatedDurationMinutes;
+    if (dto.estimatedDurationMinutes)
+      route.estimatedDurationMinutes = dto.estimatedDurationMinutes;
     return this.routesRepo.save(route);
   }
 

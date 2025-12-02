@@ -1,4 +1,11 @@
-import { ArrayNotEmpty, IsArray, IsIn, IsInt, IsPositive, ValidateNested } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsPositive,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 class StopItemDto {

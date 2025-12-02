@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SeatMap } from './seat-map.entity';
@@ -10,16 +14,21 @@ import { SeatDto } from './dto/seat.dto';
 @Injectable()
 export class SeatMapsService {
   constructor(
-    @InjectRepository(SeatMap) private readonly seatMapRepo: Repository<SeatMap>,
-    @InjectRepository(SeatDefinition) private readonly seatRepo: Repository<SeatDefinition>,
+    @InjectRepository(SeatMap)
+    private readonly seatMapRepo: Repository<SeatMap>,
+    @InjectRepository(SeatDefinition)
+    private readonly seatRepo: Repository<SeatDefinition>,
   ) {}
 
   private validateSeats(rows: number, cols: number, seats: SeatDto[]) {
     const seenCodes = new Set<string>();
     for (const seat of seats) {
-      if (seat.row < 1 || seat.row > rows) throw new BadRequestException('Seat row out of range');
-      if (seat.col < 1 || seat.col > cols) throw new BadRequestException('Seat col out of range');
-      if (seenCodes.has(seat.code)) throw new BadRequestException('Duplicate seat code');
+      if (seat.row < 1 || seat.row > rows)
+        throw new BadRequestException('Seat row out of range');
+      if (seat.col < 1 || seat.col > cols)
+        throw new BadRequestException('Seat col out of range');
+      if (seenCodes.has(seat.code))
+        throw new BadRequestException('Duplicate seat code');
       seenCodes.add(seat.code);
     }
   }

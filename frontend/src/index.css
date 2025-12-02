@@ -3,6 +3,19 @@
 @tailwind components;
 @tailwind utilities;
 
+
+/* Ẩn icon lịch mặc định của Chrome/Safari cho input[date] */
+.date-input::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  display: none;
+}
+
+/* (optional) Ẩn luôn mấy nút spin/clear nếu có */
+.date-input::-webkit-inner-spin-button,
+.date-input::-webkit-clear-button {
+  display: none;
+}
+
 :root {
   font-family: 'Inter', system-ui, sans-serif;
   color: #e5e7eb;

@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 
 export class UpdateBusDto {
   @IsOptional()
@@ -8,4 +8,13 @@ export class UpdateBusDto {
   @IsOptional()
   @IsString()
   plateNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  busType?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  amenities?: string[];
 }

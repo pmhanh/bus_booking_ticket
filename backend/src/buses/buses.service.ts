@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Bus } from './bus.entity';
@@ -11,7 +15,8 @@ import { SeatMap } from '../seat-maps/seat-map.entity';
 export class BusesService {
   constructor(
     @InjectRepository(Bus) private readonly busRepo: Repository<Bus>,
-    @InjectRepository(SeatMap) private readonly seatMapRepo: Repository<SeatMap>,
+    @InjectRepository(SeatMap)
+    private readonly seatMapRepo: Repository<SeatMap>,
   ) {}
 
   list() {
@@ -36,6 +41,8 @@ export class BusesService {
     const bus = this.busRepo.create({
       name: dto.name,
       plateNumber: dto.plateNumber,
+      busType: dto.busType || 'STANDARD',
+      amenities: dto.amenities || [],
       seatMap: seatMap ?? null,
     });
     return this.busRepo.save(bus);
@@ -46,6 +53,8 @@ export class BusesService {
     if (!bus) throw new NotFoundException('Bus not found');
     if (dto.name) bus.name = dto.name;
     if (dto.plateNumber) bus.plateNumber = dto.plateNumber;
+    if (dto.busType) bus.busType = dto.busType;
+    if (dto.amenities !== undefined) bus.amenities = dto.amenities;
     return this.busRepo.save(bus);
   }
 

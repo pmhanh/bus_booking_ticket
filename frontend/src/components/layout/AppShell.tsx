@@ -11,8 +11,8 @@ export const AppShell = ({ children }: PropsWithChildren) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen text-gray-100">
-      <header className="glass flex items-center justify-between px-6 py-4 sticky top-0 z-10">
+    <div className="min-h-screen text-gray-100 bg-[#0b1021]">
+      <header className="flex items-center justify-between px-6 py-4 sticky top-0 z-10 bg-[#0b1021]/95 border-b border-white/5 backdrop-blur-sm">
         <Link to="/" className="flex items-center gap-2 font-bold text-xl text-white">
           <span className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-secondary grid place-items-center">
             🚌
@@ -42,7 +42,6 @@ export const AppShell = ({ children }: PropsWithChildren) => {
                   onMouseLeave={() => setMenuOpen(false)}
                 >
                   <div className="text-sm font-semibold">{user.fullName || user.email}</div>
-                  <div className="text-xs text-gray-400">{user.role}</div>
                 </div>
                 <div
                   className={clsx(

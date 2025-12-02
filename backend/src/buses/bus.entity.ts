@@ -1,4 +1,10 @@
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { SeatMap } from '../seat-maps/seat-map.entity';
 
 @Entity({ name: 'buses' })
@@ -11,6 +17,12 @@ export class Bus {
 
   @Column({ unique: true })
   plateNumber: string;
+
+  @Column({ type: 'varchar', default: 'STANDARD' })
+  busType: string;
+
+  @Column('text', { array: true, default: '{}' })
+  amenities: string[];
 
   @ManyToOne(() => SeatMap, { nullable: true, eager: true })
   @JoinColumn({ name: 'seat_map_id' })

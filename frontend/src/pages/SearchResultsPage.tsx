@@ -125,7 +125,7 @@ export const SearchResultsPage = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
-      <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-emerald-800/40 p-6 md:p-10 shadow-xl">
+      <section className="relative z-30 overflow-visible rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-emerald-800/40 p-6 md:p-10 pb-12 shadow-xl">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -left-10 -top-10 h-40 w-40 bg-emerald-500/20 blur-3xl" />
           <div className="absolute right-10 top-10 h-24 w-24 bg-blue-500/20 blur-3xl" />

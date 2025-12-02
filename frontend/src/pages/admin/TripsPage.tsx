@@ -44,29 +44,33 @@ export const TripsPage = () => {
 
   const loadTrips = useCallback(
     async (availableRoutes = routes) => {
+      setLoading(true);
       const params = new URLSearchParams();
       if (filters.routeId) params.append('routeId', String(filters.routeId));
       if (filters.busId) params.append('busId', String(filters.busId));
       if (filters.fromDate) params.append('fromDate', filters.fromDate);
       if (filters.toDate) params.append('toDate', filters.toDate);
-      const res = await apiClient<Trip[]>(`/admin/trips?${params.toString()}`, { headers });
-      // N???u l???c theo origin/destination, l???c client-side
-      const filtered = res.filter((t) => {
-        if (filters.originCityId && t.route.originCity.id !== filters.originCityId) return false;
-        if (filters.destinationCityId && t.route.destinationCity.id !== filters.destinationCityId)
-          return false;
-        return true;
-      });
-      // map route from availableRoutes to include latest names
-      const map = new Map(availableRoutes.map((r) => [r.id, r]));
-      setTrips(
-        filtered.map((t) => ({
-          ...t,
-          route: map.get(t.route.id) || t.route,
-        })),
-      );
+      try {
+        const res = await apiClient<Trip[]>(`/admin/trips?${params.toString()}`, { headers });
+        // Nếu lọc theo origin/destination, lọc client-side
+        const filtered = res.filter((t) => {
+          if (filters.originCityId && t.route.originCity.id !== filters.originCityId) return false;
+          if (filters.destinationCityId && t.route.destinationCity.id !== filters.destinationCityId) return false;
+          return true;
+        });
+        // map route from availableRoutes để lấy tên mới nhất
+        const map = new Map(availableRoutes.map((r) => [r.id, r]));
+        setTrips(
+          filtered.map((t) => ({
+            ...t,
+            route: map.get(t.route.id) || t.route,
+          })),
+        );
+      } finally {
+        setLoading(false);
+      }
     },
-    [filters, headers, routes],
+    [filters, headers],
   );
 
   const loadData = useCallback(async () => {
@@ -110,7 +114,7 @@ export const TripsPage = () => {
     setError('');
     setApiMessage('');
     if (!form.routeId || !form.busId || !form.departureTime || !form.arrivalTime || !form.basePrice) {
-      setError('Please fill in all trip details.');
+      setError('Vui lòng nhập đủ thông tin chuyến.');
       return;
     }
     const payload = {
@@ -137,7 +141,7 @@ export const TripsPage = () => {
       resetForm();
       void loadTrips();
     } catch (err) {
-      setApiMessage((err as Error).message || 'Unable to save trip');
+      setApiMessage((err as Error).message || 'Không thể lưu chuyến');
     }
   };
 
@@ -153,7 +157,7 @@ export const TripsPage = () => {
   };
 
   const deleteTrip = async (id: number) => {
-    if (!window.confirm('Delete this trip?')) return;
+    if (!window.confirm('Xóa chuyến này?')) return;
     await apiClient(`/admin/trips/${id}`, { method: 'DELETE', headers });
     void loadTrips();
   };
@@ -162,21 +166,21 @@ export const TripsPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Lich chuyen</h1>
-          <p className="text-sm text-gray-400">Tao, chinh sua chuyen va gan xe.</p>
+          <h1 className="text-2xl font-bold text-white">Lịch chuyến</h1>
+          <p className="text-sm text-gray-400">Tạo, chỉnh sửa chuyến và gán xe.</p>
         </div>
       </div>
 
-      <Card title={form.id ? 'Cap nhat chuyen' : 'Tao chuyen'}>
+      <Card title={form.id ? 'Cập nhật chuyến' : 'Tạo chuyến'}>
         <div className="grid md:grid-cols-3 gap-4">
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">Tuy???n</div>
+            <div className="mb-1 font-medium">Tuyến</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
               value={form.routeId}
               onChange={(e) => setForm({ ...form, routeId: Number(e.target.value) })}
             >
-              <option value="">Ch???n tuy???n</option>
+              <option value="">Chọn tuyến</option>
               {routes.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
@@ -191,7 +195,7 @@ export const TripsPage = () => {
               value={form.busId}
               onChange={(e) => setForm({ ...form, busId: Number(e.target.value) })}
             >
-              <option value="">Ch???n xe</option>
+              <option value="">Chọn xe</option>
               {buses.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name} ({b.plateNumber})
@@ -200,19 +204,19 @@ export const TripsPage = () => {
             </select>
           </label>
           <FormField
-            label="GiA? c?? b???n"
+            label="Giá cơ bản"
             type="number"
             value={form.basePrice}
             onChange={(e) => setForm({ ...form, basePrice: Number(e.target.value) || '' })}
           />
           <FormField
-            label="Gi??? ?`i"
+            label="Giờ đi"
             type="datetime-local"
             value={form.departureTime}
             onChange={(e) => setForm({ ...form, departureTime: e.target.value })}
           />
           <FormField
-            label="Gi??? ?`???n"
+            label="Giờ đến"
             type="datetime-local"
             value={form.arrivalTime}
             onChange={(e) => setForm({ ...form, arrivalTime: e.target.value })}
@@ -225,25 +229,25 @@ export const TripsPage = () => {
           </div>
         ) : null}
         <div className="mt-4 flex gap-2">
-          <Button onClick={submitTrip}>{form.id ? 'L??u' : 'T???o chuy???n'}</Button>
+          <Button onClick={submitTrip}>{form.id ? 'Lưu' : 'Tạo chuyến'}</Button>
           {form.id ? (
             <Button variant="secondary" onClick={resetForm}>
-              H??y
+              Hủy
             </Button>
           ) : null}
         </div>
       </Card>
 
-      <Card title="B??T l???c">
+      <Card title="Bộ lọc">
         <div className="grid md:grid-cols-5 gap-3 text-sm">
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">Tuy???n</div>
+            <div className="mb-1 font-medium">Tuyến</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
               value={filters.routeId ?? ''}
               onChange={(e) => setFilters((f) => ({ ...f, routeId: e.target.value ? Number(e.target.value) : '' }))}
             >
-              <option value="">T???t c???</option>
+              <option value="">Tất cả</option>
               {routes.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
@@ -258,7 +262,7 @@ export const TripsPage = () => {
               value={filters.busId ?? ''}
               onChange={(e) => setFilters((f) => ({ ...f, busId: e.target.value ? Number(e.target.value) : '' }))}
             >
-              <option value="">T???t c???</option>
+              <option value="">Tất cả</option>
               {buses.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -267,19 +271,19 @@ export const TripsPage = () => {
             </select>
           </label>
           <FormField
-            label="T??? ngA?y"
+            label="Từ ngày"
             type="date"
             value={filters.fromDate ?? ''}
             onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))}
           />
           <FormField
-            label="?????n ngA?y"
+            label="Đến ngày"
             type="date"
             value={filters.toDate ?? ''}
             onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
           />
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">??i???m ?`i</div>
+            <div className="mb-1 font-medium">Điểm đi</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
               value={filters.originCityId ?? ''}
@@ -290,7 +294,7 @@ export const TripsPage = () => {
                 }))
               }
             >
-              <option value="">T???t c???</option>
+              <option value="">Tất cả</option>
               {cities.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -299,7 +303,7 @@ export const TripsPage = () => {
             </select>
           </label>
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">??i???m ?`???n</div>
+            <div className="mb-1 font-medium">Điểm đến</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
               value={filters.destinationCityId ?? ''}
@@ -310,7 +314,7 @@ export const TripsPage = () => {
                 }))
               }
             >
-              <option value="">T???t c???</option>
+              <option value="">Tất cả</option>
               {cities.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -321,14 +325,14 @@ export const TripsPage = () => {
         </div>
       </Card>
 
-      <Card title={loading ? '??ang t???i...' : 'Danh sA?ch chuy???n'}>
+      <Card title={loading ? 'Đang tải...' : 'Danh sách chuyến'}>
         <div className="grid grid-cols-6 gap-3 text-xs uppercase text-gray-400 border-b border-white/5 pb-2">
-          <div>Tuy???n</div>
+          <div>Tuyến</div>
           <div>Xe</div>
-          <div>Gi??? ?`i</div>
-          <div>Gi??? ?`???n</div>
-          <div>GiA?</div>
-          <div className="text-right">Thao tA?c</div>
+          <div>Giờ đi</div>
+          <div>Giờ đến</div>
+          <div>Giá</div>
+          <div className="text-right">Thao tác</div>
         </div>
         <div className="divide-y divide-white/5 text-sm text-gray-200">
           {trips.map((t) => (
@@ -336,7 +340,7 @@ export const TripsPage = () => {
               <div>
                 <div className="text-white font-semibold">{t.route?.name || '-'}</div>
                 <div className="text-xs text-gray-400">
-                  {t.route?.originCity?.name ?? '?'} {'->'} {t.route?.destinationCity?.name ?? '?'}
+                  {t.route?.originCity?.name ?? '?'} → {t.route?.destinationCity?.name ?? '?'}
                 </div>
               </div>
               <div>
@@ -345,13 +349,13 @@ export const TripsPage = () => {
               </div>
               <div className="text-xs text-gray-200">{new Date(t.departureTime).toLocaleString()}</div>
               <div className="text-xs text-gray-200">{new Date(t.arrivalTime).toLocaleString()}</div>
-              <div className="text-white font-semibold">{t.basePrice.toLocaleString('vi-VN')}?`</div>
+              <div className="text-white font-semibold">{t.basePrice.toLocaleString('vi-VN')}đ</div>
               <div className="text-right space-x-2">
                 <Button variant="secondary" onClick={() => startEdit(t)}>
-                  S??-a
+                  Sửa
                 </Button>
                 <Button variant="ghost" onClick={() => deleteTrip(t.id)}>
-                  XA3a
+                  Xóa
                 </Button>
               </div>
             </div>
@@ -361,5 +365,3 @@ export const TripsPage = () => {
     </div>
   );
 };
-
-

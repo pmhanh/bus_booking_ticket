@@ -4,7 +4,10 @@ import { Button } from '../../components/ui/Button';
 import { FormField } from '../../components/ui/FormField';
 import { apiClient } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import type { Bus, City, Route, Trip } from '../../types/admin';
+import type { Trip } from '../../types/trip';
+import type { Route } from '../../types/route';
+import type { Bus } from '../../types/bus';
+import type { City } from '../../types/city';
 
 type TripForm = {
   id?: number;

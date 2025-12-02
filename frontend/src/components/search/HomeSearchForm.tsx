@@ -136,7 +136,7 @@ export const HomeSearchForm = ({
   }, [initialOrigin?.id, initialDestination?.id, initialDate]);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="relative z-50 space-y-4">
       <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
         <div className="relative" ref={originRef}>
           <label className="block text-sm font-medium text-gray-200 mb-1">Điểm đi</label>
@@ -163,7 +163,7 @@ export const HomeSearchForm = ({
             />
           </div>
           {origin.state.open && origin.state.options.length > 0 && (
-            <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
+            <div className="absolute z-50 mt-1 w-full bg-slate-900 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
               {origin.state.options.map((opt) => (
                 <div
                   key={opt.id}
@@ -202,7 +202,7 @@ export const HomeSearchForm = ({
             />
           </div>
           {destination.state.open && destination.state.options.length > 0 && (
-            <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
+            <div className="absolute z-50 mt-1 w-full bg-slate-900 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
               {destination.state.options.map((opt) => (
                 <div
                   key={opt.id}
@@ -234,9 +234,15 @@ export const HomeSearchForm = ({
             </span>
             <input
               type="date"
-              className="w-full appearance-none pl-10 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              className="date-input w-full appearance-none pl-10 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              onFocus={(e) => {
+                // ensure the calendar pops immediately on focus when supported
+                if (typeof (e.target as HTMLInputElement).showPicker === 'function') {
+                  (e.target as HTMLInputElement).showPicker();
+                }
+              }}
             />
           </div>
         </div>

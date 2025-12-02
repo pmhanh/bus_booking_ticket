@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getTripById } from '../api/trips';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -21,6 +21,7 @@ const formatDuration = (minutes?: number) => {
 export const TripDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +35,37 @@ export const TripDetailsPage = () => {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const urlParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const searchState = useMemo(
+    () =>
+      (location.state as {
+        search?: {
+          originId?: number;
+          destinationId?: number;
+          date?: string;
+          originName?: string;
+          destinationName?: string;
+        };
+      } | undefined)?.search,
+    [location.state],
+  );
+
   const stops = useMemo(() => trip?.route?.stops?.slice().sort((a, b) => a.order - b.order) || [], [trip]);
+  const backQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    const originId = searchState?.originId || urlParams.get('originId');
+    const destinationId = searchState?.destinationId || urlParams.get('destinationId');
+    const date = searchState?.date || urlParams.get('date');
+    if (originId) params.set('originId', String(originId));
+    if (destinationId) params.set('destinationId', String(destinationId));
+    if (date) params.set('date', date);
+    return params.toString() ? `?${params.toString()}` : '';
+  }, [searchState, urlParams]);
+
+  const headerOrigin = searchState?.originName || trip?.route.originCity.name || urlParams.get('originName') || undefined;
+  const headerDestination =
+    searchState?.destinationName || trip?.route.destinationCity.name || urlParams.get('destinationName') || undefined;
+  const headerDate = searchState?.date || urlParams.get('date') || trip?.departureTime?.split('T')[0];
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -45,8 +76,13 @@ export const TripDetailsPage = () => {
           </button>
           <h1 className="text-3xl font-bold text-white">Chi tiết chuyến</h1>
           <p className="text-gray-300 text-sm">Thông tin tuyến, thời gian, loại xe và tiện ích</p>
+          {headerOrigin && headerDestination && headerDate ? (
+            <p className="text-sm text-emerald-100">
+              Đang xem chuyến: {headerOrigin} {'->'} {headerDestination} ngày {headerDate}
+            </p>
+          ) : null}
         </div>
-        <Link to="/search">
+        <Link to={backQuery ? `/search${backQuery}` : '/search'}>
           <Button variant="secondary">Tìm lại</Button>
         </Link>
       </div>

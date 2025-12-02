@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { FormField } from '../../components/ui/FormField';
 import { apiClient } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import type { SeatMap } from '../../types/admin';
+import type { SeatMap } from '../../types/seatMap';
 
 type SeatCell = {
   row: number;

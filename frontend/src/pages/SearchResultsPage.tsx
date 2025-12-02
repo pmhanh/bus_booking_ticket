@@ -349,7 +349,7 @@ export const SearchResultsPage = () => {
           {error ? <Card className="text-red-200 text-sm">{error}</Card> : null}
 
           {!loading && !error && result?.data?.length
-            ? result.data.map((trip) => <TripCard key={trip.id} trip={trip} />)
+            ? result.data.map((trip) => <TripCard key={trip.id} trip={trip} filters={filters} />)
             : null}
 
           {!loading && !error && result && result.data.length === 0 ? (
@@ -387,8 +387,20 @@ export const SearchResultsPage = () => {
   );
 };
 
-const TripCard = ({ trip }: { trip: Trip }) => {
+const TripCard = ({ trip, filters }: { trip: Trip; filters: TripSearchParams }) => {
   const duration = formatDuration(trip.durationMinutes);
+  const fallbackDate = trip.departureTime?.split('T')[0];
+  const detailState = {
+    originId: filters.originId ?? trip.route.originCity.id,
+    originName: trip.route.originCity.name,
+    destinationId: filters.destinationId ?? trip.route.destinationCity.id,
+    destinationName: trip.route.destinationCity.name,
+    date: filters.date ?? fallbackDate,
+  };
+  const detailQuery = new URLSearchParams();
+  if (detailState.originId) detailQuery.set('originId', String(detailState.originId));
+  if (detailState.destinationId) detailQuery.set('destinationId', String(detailState.destinationId));
+  if (detailState.date) detailQuery.set('date', detailState.date);
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur px-4 py-4 md:px-6 md:py-5 shadow-card">
       <div className="grid md:grid-cols-[1fr_auto] gap-4 items-center">
@@ -435,7 +447,10 @@ const TripCard = ({ trip }: { trip: Trip }) => {
             <div className="text-2xl font-bold text-emerald-200">{currency(trip.basePrice)}</div>
           </div>
           <div className="flex gap-2">
-            <Link to={`/trips/${trip.id}`}>
+            <Link
+              to={detailQuery.toString() ? `/trips/${trip.id}?${detailQuery.toString()}` : `/trips/${trip.id}`}
+              state={{ search: detailState }}
+            >
               <Button variant="secondary" className="px-4">
                 Details
               </Button>

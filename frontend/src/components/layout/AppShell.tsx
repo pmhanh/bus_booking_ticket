@@ -12,7 +12,7 @@ export const AppShell = ({ children }: PropsWithChildren) => {
 
   return (
     <div className="min-h-screen text-gray-100 bg-[#0b1021]">
-      <header className="flex items-center justify-between px-6 py-4 sticky top-0 z-10 bg-[#0b1021]/95 border-b border-white/5 backdrop-blur-sm">
+      <header className="flex items-center justify-between px-6 py-4 sticky top-0 z-50 bg-[#0b1021]/95 border-b border-white/5 backdrop-blur-sm">
         <Link to="/" className="flex items-center gap-2 font-bold text-xl text-white">
           <span className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-secondary grid place-items-center">
             🚌

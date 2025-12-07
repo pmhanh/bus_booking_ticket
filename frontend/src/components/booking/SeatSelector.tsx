@@ -7,9 +7,10 @@ type Props = {
   tripId: number;
   selected: string[];
   onToggle: (seat: SeatStatus) => void;
+  lockToken?: string;
 };
 
-export const SeatSelector = ({ tripId, selected, onToggle }: Props) => {
+export const SeatSelector = ({ tripId, selected, onToggle, lockToken }: Props) => {
   const [seats, setSeats] = useState<SeatStatus[]>([]);
   const [meta, setMeta] = useState<{ rows: number; cols: number; name?: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -17,7 +18,7 @@ export const SeatSelector = ({ tripId, selected, onToggle }: Props) => {
 
   const load = useCallback(() => {
     setLoading(true);
-    getSeatStatus(tripId)
+    getSeatStatus(tripId, lockToken)
       .then((res) => {
         setSeats(res.seats || []);
         setMeta(res.seatMap ? { rows: res.seatMap.rows, cols: res.seatMap.cols, name: res.seatMap.name } : null);
@@ -25,7 +26,7 @@ export const SeatSelector = ({ tripId, selected, onToggle }: Props) => {
       })
       .catch((err) => setError(err.message || 'Unable to fetch seats'))
       .finally(() => setLoading(false));
-  }, [tripId]);
+  }, [tripId, lockToken]);
 
   useEffect(() => {
     load();

@@ -8,11 +8,18 @@ export type BookingPassenger = {
   price: number;
 };
 
+export type PassengerInput = {
+  seatCode?: string;
+  name: string;
+  phone?: string;
+  idNumber?: string;
+};
+
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED';
 
 export type Booking = {
   id: string;
-  referenceCode: string;
+  reference?: string | null;
   trip: Trip;
   contactName: string;
   contactEmail?: string | null;

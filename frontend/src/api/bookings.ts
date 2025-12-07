@@ -1,24 +1,19 @@
 import { apiClient } from '../lib/api';
-import type { Booking, SeatStatusResponse } from '../types/booking';
-
-export type BookingSeatPayload = {
-  seatCode: string;
-  name: string;
-  phone?: string;
-  idNumber?: string;
-  price?: number;
-};
+import type { Booking, PassengerInput, SeatStatusResponse } from '../types/booking';
 
 export type CreateBookingPayload = {
   tripId: number;
   contactName: string;
   contactEmail?: string;
-  contactPhone: string;
-  seats: BookingSeatPayload[];
+  contactPhone?: string;
+  seats: string[];
+  passengers?: PassengerInput[];
+  lockToken?: string;
 };
 
-export async function getSeatStatus(tripId: number) {
-  return apiClient<SeatStatusResponse>(`/bookings/trips/${tripId}/seats`, { method: 'GET' });
+export async function getSeatStatus(tripId: number, lockToken?: string) {
+  const qs = lockToken ? `?lockToken=${encodeURIComponent(lockToken)}` : '';
+  return apiClient<SeatStatusResponse>(`/bookings/trips/${tripId}/seats${qs}`, { method: 'GET' });
 }
 
 export async function createBooking(payload: CreateBookingPayload, token?: string | null) {
@@ -39,7 +34,7 @@ export async function getMyBookings(token: string) {
 
 export async function lookupBooking(code: string, phone?: string, email?: string) {
   const qs = new URLSearchParams();
-  qs.set('code', code);
+  qs.set('reference', code);
   if (phone) qs.set('phone', phone);
   if (email) qs.set('email', email);
   return apiClient<Booking>(`/bookings/lookup?${qs.toString()}`, { method: 'GET' });
@@ -61,7 +56,7 @@ export async function cancelBooking(
 ) {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
   return apiClient<Booking>(`/bookings/${id}/cancel`, {
-    method: 'POST',
+    method: 'PATCH',
     headers,
     body: JSON.stringify(contact || {}),
   });

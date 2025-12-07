@@ -8,7 +8,7 @@ import { createBooking } from '../api/bookings';
 
 export const BookingReviewPage = () => {
   const navigate = useNavigate();
-  const { trip, passengers, contact, totalPrice, clear } = useBooking();
+  const { trip, passengers, contact, totalPrice, clear, lockInfo } = useBooking();
   const { accessToken, user } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,15 +26,16 @@ export const BookingReviewPage = () => {
       contactName: contact.name,
       contactEmail: contact.email,
       contactPhone: contact.phone,
-      seats: passengers.map((p) => ({
+      seats: passengers.map((p) => p.seatCode).filter(Boolean) as string[],
+      passengers: passengers.map((p) => ({
         seatCode: p.seatCode,
         name: p.name,
         phone: p.phone,
         idNumber: p.idNumber,
-        price: p.price ?? trip.basePrice,
       })),
+      lockToken: lockInfo?.token,
     };
-  }, [contact.email, contact.name, contact.phone, passengers, trip]);
+  }, [contact.email, contact.name, contact.phone, passengers, trip, lockInfo?.token]);
 
   const confirmBooking = async () => {
     if (!payload) return;

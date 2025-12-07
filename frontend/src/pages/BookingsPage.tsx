@@ -102,7 +102,13 @@ export const BookingsPage = () => {
           contactName: editContact.name,
           contactPhone: editContact.phone,
           contactEmail: editContact.email,
-          seats: editPassengers,
+          seats: editPassengers.map((p) => p.seatCode),
+          passengers: editPassengers.map((p) => ({
+            seatCode: p.seatCode,
+            name: p.name,
+            phone: p.phone,
+            idNumber: p.idNumber,
+          })),
         },
         accessToken,
       );
@@ -122,7 +128,6 @@ export const BookingsPage = () => {
         <div>
           <p className="text-xs uppercase text-gray-400">Bookings</p>
           <h1 className="text-3xl font-bold text-white">Quản lý đặt chỗ</h1>
-          <p className="text-sm text-gray-300">Xem, sửa đổi, hoặc huỷ vé đã đặt. Hỗ trợ cả khách vãng lai.</p>
         </div>
         <Link to="/search">
           <Button variant="secondary">Đặt chuyến mới</Button>
@@ -144,38 +149,44 @@ export const BookingsPage = () => {
         </Card>
       ) : null}
 
-      <Card title="Tra cứu đặt chỗ (không cần đăng nhập)">
-        <div className="grid md:grid-cols-3 gap-3">
-          <FormField label="Mã đặt chỗ" value={lookupCode} onChange={(e) => setLookupCode(e.target.value)} />
-          <FormField
-            label="Số điện thoại"
-            value={lookupPhone}
-            placeholder="Dùng để xác thực"
-            onChange={(e) => setLookupPhone(e.target.value)}
-          />
-          <FormField
-            label="Email"
-            value={lookupEmail}
-            placeholder="Tuỳ chọn"
-            onChange={(e) => setLookupEmail(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={handleLookup} disabled={lookupLoading || !lookupCode || (!lookupPhone && !lookupEmail)}>
-            {lookupLoading ? 'Đang tìm...' : 'Tra cứu'}
-          </Button>
-          {lookupError ? <span className="text-sm text-red-200">{lookupError}</span> : null}
-        </div>
 
-        {lookupResult ? (
-          <div className="mt-4">
-            <BookingRow booking={lookupResult} onCancel={handleCancel} onEdit={startEdit} />
+      {!user ? (
+        <Card title="Tra cứu đặt chỗ (không cần đăng nhập)">
+          <div className="grid md:grid-cols-3 gap-3">
+            <FormField label="Mã đặt chỗ" value={lookupCode} onChange={(e) => setLookupCode(e.target.value)} />
+            <FormField
+              label="Số điện thoại"
+              value={lookupPhone}
+              placeholder="Đăng nhập để xác thực"
+              onChange={(e) => setLookupPhone(e.target.value)}
+            />
+            <FormField
+              label="Email"
+              value={lookupEmail}
+              placeholder="Tùy chọn"
+              onChange={(e) => setLookupEmail(e.target.value)}
+            />
           </div>
-        ) : null}
-      </Card>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleLookup} disabled={lookupLoading || !lookupCode || (!lookupPhone && !lookupEmail)}>
+              {lookupLoading ? 'Đang tải...' : 'Tra cứu đặt chỗ'}
+            </Button>
+            {lookupError ? <span className="text-sm text-red-200">{lookupError}</span> : null}
+          </div>
+
+          {lookupResult ? (
+            <div className="mt-4">
+              <BookingRow booking={lookupResult} onCancel={handleCancel} onEdit={startEdit} />
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+
+
+
 
       {editing ? (
-        <Card title={`Chỉnh sửa đặt chỗ ${editing.referenceCode}`}>
+        <Card title={`Chỉnh sửa đặt chỗ ${editing.reference || editing.id}`}>
           {editError ? <div className="text-sm text-red-200 mb-2">{editError}</div> : null}
           <div className="grid md:grid-cols-3 gap-3">
             <FormField
@@ -250,7 +261,7 @@ const BookingRow = ({
       <div className="text-xs text-gray-400">
         {new Date(booking.trip.departureTime).toLocaleString()} · Ghế: {booking.passengers.map((p) => p.seatCode).join(', ')}
       </div>
-      <div className="text-xs text-emerald-200">Mã: {booking.referenceCode}</div>
+      <div className="text-xs text-emerald-200">Mã: {booking.reference || booking.id}</div>
     </div>
     <div className="flex items-center gap-2">
       <Link to={`/bookings/${booking.id}/ticket`} state={{ booking }}>
@@ -267,3 +278,4 @@ const BookingRow = ({
     </div>
   </div>
 );
+

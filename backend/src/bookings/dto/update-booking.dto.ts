@@ -7,7 +7,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { BookingPassengerDto } from './create-booking.dto';
+import { PassengerDto } from './passenger.dto';
 
 export class UpdateBookingDto {
   @IsOptional()
@@ -26,6 +26,11 @@ export class UpdateBookingDto {
   @IsArray()
   @ArrayNotEmpty()
   @ValidateNested({ each: true })
-  @Type(() => BookingPassengerDto)
-  seats?: BookingPassengerDto[];
+  @Type(() => PassengerDto)
+  passengers?: PassengerDto[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  seats?: string[];
 }

@@ -11,13 +11,14 @@ import { SeatLock } from './seat-lock.entity';
 import { TripSeatsService } from './trip-seats.service';
 import { TripSeatsController } from './trip-seats.controller';
 import { Booking } from '../bookings/booking.entity';
+import { TripSeatsGateway } from './trip-seats.gateway';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Trip, Route, Bus, SeatMap, SeatLock, Booking]),
   ],
-  providers: [TripsService, TripSeatsService],
+  providers: [TripsService, TripSeatsService, TripSeatsGateway],
   controllers: [TripsController, TripsPublicController, TripSeatsController],
-  exports: [TripSeatsService],
+  exports: [TripSeatsService, TripSeatsGateway],
 })
 export class TripsModule {}

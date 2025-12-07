@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
@@ -13,6 +15,7 @@ import { SeatLock } from './seat-lock.entity';
 import { LockSeatsDto } from './dto/lock-seats.dto';
 import { RefreshLockDto } from './dto/refresh-lock.dto';
 import { Booking } from '../bookings/booking.entity';
+import { TripSeatsGateway } from './trip-seats.gateway';
 
 type SeatStatus = 'available' | 'locked' | 'held' | 'inactive';
 
@@ -26,6 +29,8 @@ export class TripSeatsService {
     private readonly seatLockRepo: Repository<SeatLock>,
     @InjectRepository(Booking)
     private readonly bookingRepo: Repository<Booking>,
+    @Inject(forwardRef(() => TripSeatsGateway))
+    private readonly tripSeatsGateway?: TripSeatsGateway,
   ) {}
 
   private async getTripContext(tripId: number) {
@@ -136,7 +141,7 @@ export class TripSeatsService {
     return new Date(Date.now() + minutes * 60000);
   }
 
-  async lockSeats(tripId: number, dto: LockSeatsDto, userId: string) {
+  async lockSeats(tripId: number, dto: LockSeatsDto, userId?: string) {
     const { trip, seatMap } = await this.getTripContext(tripId);
     await this.pruneExpiredLocks(tripId);
     await this.expireOldBookings(tripId);
@@ -156,13 +161,13 @@ export class TripSeatsService {
 
     let lockToken = dto.lockToken ?? randomUUID();
     if (dto.lockToken) {
-      const existing = await this.seatLockRepo.find({
-        where: { trip: { id: tripId }, lockToken: dto.lockToken },
-      });
-      if (!existing.length)
-        throw new NotFoundException('Lock token not found or expired');
-      if (existing[0].userId && existing[0].userId !== userId)
-        throw new ForbiddenException('Lock token belongs to another user');
+    const existing = await this.seatLockRepo.find({
+      where: { trip: { id: tripId }, lockToken: dto.lockToken },
+    });
+    if (!existing.length)
+      throw new NotFoundException('Lock token not found or expired');
+    if (existing[0].userId && userId && existing[0].userId !== userId)
+      throw new ForbiddenException('Lock token belongs to another user');
       await this.seatLockRepo.delete({
         trip: { id: tripId },
         lockToken: dto.lockToken,
@@ -211,19 +216,21 @@ export class TripSeatsService {
     await this.seatLockRepo.save(locks);
 
     const availability = await this.getSeatMap(tripId, lockToken);
-    return {
+    const response = {
       lockToken,
       expiresAt,
       seats: requested,
       availability,
     };
+    this.tripSeatsGateway?.broadcastAvailability(tripId, availability);
+    return response;
   }
 
   async refreshLock(
     tripId: number,
     token: string,
     dto: RefreshLockDto,
-    userId: string,
+    userId?: string,
   ) {
     await this.pruneExpiredLocks(tripId);
     const locks = await this.seatLockRepo.find({
@@ -231,29 +238,32 @@ export class TripSeatsService {
     });
     if (!locks.length)
       throw new NotFoundException('Lock not found or already expired');
-    if (locks[0].userId && locks[0].userId !== userId)
+    if (locks[0].userId && userId && locks[0].userId !== userId)
       throw new ForbiddenException('Lock token belongs to another user');
     const expiresAt = this.resolveExpiry(dto.holdMinutes);
     locks.forEach((l) => (l.expiresAt = expiresAt));
     await this.seatLockRepo.save(locks);
     const availability = await this.getSeatMap(tripId, token);
-    return {
+    const response = {
       lockToken: token,
       expiresAt,
       seats: locks.map((l) => l.seatCode),
       availability,
     };
+    this.tripSeatsGateway?.broadcastAvailability(tripId, availability);
+    return response;
   }
 
-  async releaseLock(tripId: number, token: string, userId: string) {
+  async releaseLock(tripId: number, token: string, userId?: string) {
     const locks = await this.seatLockRepo.find({
       where: { trip: { id: tripId }, lockToken: token },
     });
     if (!locks.length) return { released: false };
-    if (locks[0].userId && locks[0].userId !== userId)
+    if (locks[0].userId && userId && locks[0].userId !== userId)
       throw new ForbiddenException('Lock token belongs to another user');
     await this.seatLockRepo.delete({ trip: { id: tripId }, lockToken: token });
     const availability = await this.getSeatMap(tripId);
+    this.tripSeatsGateway?.broadcastAvailability(tripId, availability);
     return { released: true, availability };
   }
 }

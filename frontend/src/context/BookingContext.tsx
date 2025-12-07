@@ -12,17 +12,21 @@ export type PassengerForm = {
 
 type SeatSelection = { code: string; price?: number };
 type ContactInfo = { name: string; email?: string; phone: string };
+type LockInfo = { token: string; expiresAt: string | null } | null;
 
 type BookingContextValue = {
   trip: Trip | null;
   selectedSeats: SeatSelection[];
   passengers: PassengerForm[];
   contact: ContactInfo;
+  lockInfo: LockInfo;
   totalPrice: number;
   setTrip: (trip: Trip | null) => void;
   toggleSeat: (seat: SeatSelection) => void;
+  setSelectedSeats: (seats: SeatSelection[]) => void;
   updatePassenger: (seatCode: string, data: Partial<PassengerForm>) => void;
   setContact: (data: Partial<ContactInfo>) => void;
+  setLockInfo: (lock: LockInfo) => void;
   clear: () => void;
 };
 
@@ -30,22 +34,24 @@ const BookingContext = createContext<BookingContextValue | undefined>(undefined)
 
 export const BookingProvider = ({ children }: PropsWithChildren) => {
   const [trip, setTripState] = useState<Trip | null>(null);
-  const [selectedSeats, setSelectedSeats] = useState<SeatSelection[]>([]);
+  const [selectedSeats, setSelectedSeatsState] = useState<SeatSelection[]>([]);
   const [passengers, setPassengers] = useState<PassengerForm[]>([]);
   const [contact, setContactState] = useState<ContactInfo>({ name: '', phone: '' });
+  const [lockInfo, setLockInfoState] = useState<LockInfo>(null);
 
   const setTrip = useCallback((next: Trip | null) => {
     setTripState((prev) => {
       if (!next || prev?.id !== next.id) {
-        setSelectedSeats([]);
+        setSelectedSeatsState([]);
         setPassengers([]);
+        setLockInfoState(null);
       }
       return next;
     });
   }, []);
 
   const toggleSeat = useCallback((seat: SeatSelection) => {
-    setSelectedSeats((prev) => {
+    setSelectedSeatsState((prev) => {
       const exists = prev.some((s) => s.code === seat.code);
       if (exists) {
         setPassengers((ps) => ps.filter((p) => p.seatCode !== seat.code));
@@ -57,6 +63,24 @@ export const BookingProvider = ({ children }: PropsWithChildren) => {
         return Array.from(uniq.values());
       });
       return [...prev, seat];
+    });
+  }, []);
+
+  const setSelectedSeats = useCallback((seats: SeatSelection[]) => {
+    const unique = Array.from(new Map(seats.map((s) => [s.code, s])).values());
+    setSelectedSeatsState(unique);
+    setPassengers((prev) => {
+      const existing = new Map(prev.map((p) => [p.seatCode, p]));
+      return unique.map((seat) => {
+        const found = existing.get(seat.code);
+        return {
+          seatCode: seat.code,
+          name: found?.name || '',
+          phone: found?.phone,
+          idNumber: found?.idNumber,
+          price: seat.price ?? found?.price,
+        };
+      });
     });
   }, []);
 
@@ -72,11 +96,16 @@ export const BookingProvider = ({ children }: PropsWithChildren) => {
     setContactState((prev) => ({ ...prev, ...data }));
   }, []);
 
+  const setLockInfo = useCallback((lock: LockInfo) => {
+    setLockInfoState(lock);
+  }, []);
+
   const clear = useCallback(() => {
     setTripState(null);
     setSelectedSeats([]);
     setPassengers([]);
     setContactState({ name: '', phone: '' });
+    setLockInfoState(null);
   }, []);
 
   const totalPrice = useMemo(() => {
@@ -90,14 +119,31 @@ export const BookingProvider = ({ children }: PropsWithChildren) => {
       selectedSeats,
       passengers,
       contact,
+      lockInfo,
       totalPrice,
       setTrip,
       toggleSeat,
+      setSelectedSeats,
       updatePassenger,
       setContact,
+      setLockInfo,
       clear,
     }),
-    [trip, selectedSeats, passengers, contact, totalPrice, setTrip, toggleSeat, updatePassenger, setContact, clear],
+    [
+      trip,
+      selectedSeats,
+      passengers,
+      contact,
+      lockInfo,
+      totalPrice,
+      setTrip,
+      toggleSeat,
+      setSelectedSeats,
+      updatePassenger,
+      setContact,
+      setLockInfo,
+      clear,
+    ],
   );
 
   return <BookingContext.Provider value={value}>{children}</BookingContext.Provider>;

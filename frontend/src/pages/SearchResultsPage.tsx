@@ -143,7 +143,6 @@ export const SearchResultsPage = () => {
         </div>
         <div className="relative space-y-4">
           <div className="text-center space-y-2">
-            <p className="text-emerald-200 text-sm uppercase tracking-[0.2em]">Tìm & lọc chuyến</p>
             <h1 className="text-3xl md:text-4xl font-bold text-white">
               Chọn chuyến xe phù hợp với bộ lọc linh hoạt
             </h1>
@@ -448,17 +447,14 @@ const TripCard = ({ trip, filters }: { trip: Trip; filters: TripSearchParams }) 
           </div>
         </div>
         <div className="flex flex-col items-end gap-3">
-          <div className="text-right">
-            <div className="text-xs uppercase text-gray-400">From</div>
-            <div className="text-2xl font-bold text-emerald-200">{currency(trip.basePrice)}</div>
-          </div>
+
           <div className="flex gap-2">
             <Link
               to={detailQuery.toString() ? `/trips/${trip.id}?${detailQuery.toString()}` : `/trips/${trip.id}`}
               state={{ search: detailState }}
             >
               <Button variant="secondary" className="px-4">
-                Details
+                Chi tiết
               </Button>
             </Link>
             <Link
@@ -469,7 +465,7 @@ const TripCard = ({ trip, filters }: { trip: Trip; filters: TripSearchParams }) 
               }
               state={{ search: detailState }}
             >
-              <Button className="px-4">Book</Button>
+              <Button className="px-4">Đặt chỗ</Button>
             </Link>
           </div>
         </div>

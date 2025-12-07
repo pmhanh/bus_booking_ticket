@@ -6,10 +6,12 @@ import { Booking } from './booking.entity';
 import { Trip } from '../trips/trip.entity';
 import { SeatLock } from '../trips/seat-lock.entity';
 import { SeatMap } from '../seat-maps/seat-map.entity';
+import { TripsModule } from '../trips/trips.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Booking, Trip, SeatLock, SeatMap]),
+    TripsModule,
   ],
   providers: [BookingsService],
   controllers: [BookingsController],

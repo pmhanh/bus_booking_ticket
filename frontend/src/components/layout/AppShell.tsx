@@ -12,26 +12,29 @@ export const AppShell = ({ children }: PropsWithChildren) => {
 
   return (
     <div className="min-h-screen text-gray-100 bg-[#0b1021]">
-      <header className="flex items-center justify-between px-6 py-4 sticky top-0 z-50 bg-[#0b1021]/95 border-b border-white/5 backdrop-blur-sm">
+      <header className="flex items-center justify-between px-6 py-4 sticky top-0 z-50 bg-[#0b1021]/95 border-b border-white/5 backdrop-blur-sm print:hidden">
         <Link to="/" className="flex items-center gap-2 font-bold text-xl text-white">
           <span className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-secondary grid place-items-center">
             🚌
           </span>
           <span>BusTicket One</span>
         </Link>
-        {user ? (
-          <nav className="flex items-center gap-3 text-sm uppercase tracking-wide">
-            {user.role !== 'admin' ? <NavItem to="/" label="Home" /> : null}
-            {user.role !== 'admin' ? <NavItem to="/bookings" label="Bookings" /> : null}
-            {user.role === 'admin' ? <NavItem to="/dashboard" label="Dashboard" /> : null}
-            {user.role === 'admin' ? <NavItem to="/admin/trips" label="Trips" /> : null}
-            {user.role === 'admin' ? <NavItem to="/admin/routes" label="Routes" /> : null}
-            {user.role === 'admin' ? <NavItem to="/admin/seat-maps" label="Seat maps" /> : null}
-            {user.role === 'admin' && <NavItem to="/admin/users" label="Users" />}
-          </nav>
-        ) : (
-          <div />
-        )}
+        <nav className="flex items-center gap-3 text-sm uppercase tracking-wide">
+          {user?.role === 'admin' ? (
+            <>
+              <NavItem to="/dashboard" label="Dashboard" />
+              <NavItem to="/admin/trips" label="Trips" />
+              <NavItem to="/admin/routes" label="Routes" />
+              <NavItem to="/admin/seat-maps" label="Seat maps" />
+              <NavItem to="/admin/users" label="Users" />
+            </>
+          ) : (
+            <>
+              <NavItem to="/" label="Home" />
+              <NavItem to="/bookings" label="Bookings" />
+            </>
+          )}
+        </nav>
         <div className="flex items-center gap-3">
           {user ? (
             <>

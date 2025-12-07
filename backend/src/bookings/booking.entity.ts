@@ -18,8 +18,8 @@ export class Booking {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  reference: string;
+  @Column({ type: 'varchar', nullable: true })
+  reference?: string | null;
 
   @ManyToOne(() => Trip, { eager: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'trip_id' })

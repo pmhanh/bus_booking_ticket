@@ -75,6 +75,29 @@ export const TripDetailsPage = () => {
       } | undefined)?.search,
     [location.state],
   );
+  const headerOrigin = searchState?.originName || urlParams.get('originName') || trip?.route.originCity.name;
+  const headerDestination =
+    searchState?.destinationName || urlParams.get('destinationName') || trip?.route.destinationCity.name;
+  const headerDate = searchState?.date || urlParams.get('date') || trip?.departureTime?.split('T')[0];
+  const backQuery = useMemo(() => {
+    const qs = new URLSearchParams();
+    const originId = searchState?.originId || (urlParams.get('originId') ? Number(urlParams.get('originId')) : undefined);
+    const destinationId =
+      searchState?.destinationId || (urlParams.get('destinationId') ? Number(urlParams.get('destinationId')) : undefined);
+    const date = searchState?.date || urlParams.get('date');
+    const originName = searchState?.originName || urlParams.get('originName');
+    const destinationName = searchState?.destinationName || urlParams.get('destinationName');
+    if (originId) {
+      qs.set('originId', String(originId));
+      if (originName) qs.set('originName', originName);
+    }
+    if (destinationId) {
+      qs.set('destinationId', String(destinationId));
+      if (destinationName) qs.set('destinationName', destinationName);
+    }
+    if (date) qs.set('date', date);
+    return qs.toString() ? `?${qs.toString()}` : '';
+  }, [searchState, urlParams]);
 
   const stops = useMemo(() => trip?.route?.stops?.slice().sort((a, b) => a.order - b.order) || [], [trip]);
   const readyForReview =
@@ -201,7 +224,13 @@ export const TripDetailsPage = () => {
                 ) : (
                   selectedSeats.map((seat) => {
                     const passenger =
-                      passengers.find((p) => p.seatCode === seat.code) || ({ seatCode: seat.code, name: '' } as const);
+                      passengers.find((p) => p.seatCode === seat.code) || {
+                        seatCode: seat.code,
+                        name: '',
+                        phone: '',
+                        idNumber: '',
+                        price: seat.price ?? trip.basePrice,
+                      };
                     const seatPrice = passenger.price ?? seat.price ?? trip.basePrice;
                     return (
                       <div

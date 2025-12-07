@@ -33,8 +33,17 @@ export const SeatSelector = ({ tripId, selected, onToggle }: Props) => {
     return () => window.clearInterval(timer);
   }, [load]);
 
-  const rows = useMemo(() => meta?.rows || Math.max(0, ...seats.map((s) => s.row)), [meta?.rows, seats]);
-  const cols = useMemo(() => meta?.cols || Math.max(0, ...seats.map((s) => s.col)), [meta?.cols, seats]);
+  // Deduplicate by seat code to avoid duplicate keys and double-add selections
+  const seatGrid = useMemo(() => {
+    const map = new Map<string, SeatStatus>();
+    seats.forEach((s) => {
+      if (!map.has(s.code)) map.set(s.code, s);
+    });
+    return Array.from(map.values());
+  }, [seats]);
+
+  const rows = useMemo(() => meta?.rows || Math.max(0, ...seatGrid.map((s) => s.row)), [meta?.rows, seatGrid]);
+  const cols = useMemo(() => meta?.cols || Math.max(0, ...seatGrid.map((s) => s.col)), [meta?.cols, seatGrid]);
 
   return (
     <div className="space-y-3">
@@ -57,43 +66,43 @@ export const SeatSelector = ({ tripId, selected, onToggle }: Props) => {
       {seats.length ? (
         <div
           className="grid gap-2 bg-white/5 border border-white/10 rounded-2xl p-4"
-          style={{ gridTemplateColumns: `repeat(${Math.max(cols, 1)}, minmax(48px, 1fr))` }}
+          style={{
+            gridTemplateColumns: `repeat(${Math.max(cols, 1)}, minmax(48px, 1fr))`,
+            gridTemplateRows: `repeat(${Math.max(rows, 1)}, auto)`,
+          }}
         >
-          {seats
-            .slice()
-            .sort((a, b) => (a.row === b.row ? a.col - b.col : a.row - b.row))
-            .map((seat) => {
-              const isSelected = selected.includes(seat.code);
-              const disabled =
-                (!isSelected && seat.status !== 'available') || seat.isActive === false;
-              const tone =
-                seat.status === 'booked'
-                  ? 'bg-gray-600 border-gray-400 text-gray-200'
-                  : seat.status === 'reserved'
-                    ? 'bg-white border-white/80 text-gray-900'
-                    : 'bg-emerald-600/80 border-emerald-300/70 text-white';
-              return (
-                <button
-                  key={seat.code}
-                  disabled={disabled}
-                  onClick={() => onToggle(seat)}
-                  className={clsx(
-                    'h-14 rounded-xl border text-sm font-semibold transition-all flex flex-col items-center justify-center relative',
-                    tone,
-                    isSelected ? 'ring-2 ring-primary shadow-lg bg-primary/90 text-white' : null,
-                    disabled ? 'opacity-60 cursor-not-allowed' : 'hover:-translate-y-0.5 hover:shadow-card',
-                  )}
-                >
-                  <span>{seat.code}</span>
-                  <span className="text-[11px] font-normal opacity-80">{seat.price.toLocaleString()} đ</span>
-                  {seat.status !== 'available' && !isSelected ? (
-                    <span className="absolute top-1 right-1 text-[10px] uppercase font-semibold opacity-80">
-                      {seat.status === 'booked' ? 'Sold' : 'Hold'}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
+          {seatGrid.map((seat) => {
+            const isSelected = selected.includes(seat.code);
+            const disabled = (!isSelected && seat.status !== 'available') || seat.isActive === false;
+            const tone =
+              seat.status === 'booked'
+                ? 'bg-gray-600 border-gray-400 text-gray-200'
+                : seat.status === 'reserved'
+                  ? 'bg-white border-white/80 text-gray-900'
+                  : 'bg-emerald-600/80 border-emerald-300/70 text-white';
+            return (
+              <button
+                key={`${seat.code}-${seat.row}-${seat.col}`}
+                disabled={disabled}
+                onClick={() => onToggle(seat)}
+                style={{ gridColumn: seat.col, gridRow: seat.row }}
+                className={clsx(
+                  'h-14 rounded-xl border text-sm font-semibold transition-all flex flex-col items-center justify-center relative',
+                  tone,
+                  isSelected ? 'ring-2 ring-primary shadow-lg bg-primary/90 text-white' : null,
+                  disabled ? 'opacity-60 cursor-not-allowed' : 'hover:-translate-y-0.5 hover:shadow-card',
+                )}
+              >
+                <span>{seat.code}</span>
+                <span className="text-[11px] font-normal opacity-80">{seat.price.toLocaleString()} đ</span>
+                {seat.status !== 'available' && !isSelected ? (
+                  <span className="absolute top-1 right-1 text-[10px] uppercase font-semibold opacity-80">
+                    {seat.status === 'booked' ? 'Sold' : 'Hold'}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
       ) : (
         <div className="text-sm text-gray-300">Chưa có sơ đồ ghế cho chuyến này.</div>

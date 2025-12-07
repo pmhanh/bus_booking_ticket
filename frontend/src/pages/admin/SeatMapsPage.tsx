@@ -26,6 +26,7 @@ export const SeatMapsPage = () => {
   const [basePrice, setBasePrice] = useState(100000);
   const [cells, setCells] = useState<SeatCell[]>([]);
   const [selectedCell, setSelectedCell] = useState<SeatCell | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const headers = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
 
   const makeCells = useCallback(
@@ -143,6 +144,7 @@ export const SeatMapsPage = () => {
   };
 
   const saveSeatMap = async () => {
+    setSaveError(null);
     const seatsPayload = cells
       .filter((c) => c.isSeat)
       .map((c) => ({
@@ -152,6 +154,10 @@ export const SeatMapsPage = () => {
         price: c.price ?? basePrice,
         isActive: true,
       }));
+    if (!seatsPayload.length) {
+      setSaveError('Cần chọn ít nhất 1 ghế trước khi lưu sơ đồ.');
+      return;
+    }
     const payload = { name, rows, cols, seats: seatsPayload };
     if (selectedId) {
       await apiClient(`/admin/seat-maps/${selectedId}`, {
@@ -281,6 +287,7 @@ export const SeatMapsPage = () => {
                 Làm mới
               </Button>
             ) : null}
+            {saveError ? <div className="text-sm text-error">{saveError}</div> : null}
           </div>
         </Card>
       </div>

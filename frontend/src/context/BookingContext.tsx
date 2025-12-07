@@ -46,12 +46,16 @@ export const BookingProvider = ({ children }: PropsWithChildren) => {
 
   const toggleSeat = useCallback((seat: SeatSelection) => {
     setSelectedSeats((prev) => {
-      const exists = prev.find((s) => s.code === seat.code);
+      const exists = prev.some((s) => s.code === seat.code);
       if (exists) {
         setPassengers((ps) => ps.filter((p) => p.seatCode !== seat.code));
         return prev.filter((s) => s.code !== seat.code);
       }
-      setPassengers((ps) => [...ps, { seatCode: seat.code, name: '', price: seat.price }]);
+      setPassengers((ps) => {
+        const next = [...ps, { seatCode: seat.code, name: '', price: seat.price }];
+        const uniq = new Map(next.map((p) => [p.seatCode, p]));
+        return Array.from(uniq.values());
+      });
       return [...prev, seat];
     });
   }, []);

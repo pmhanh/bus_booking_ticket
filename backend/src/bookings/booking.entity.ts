@@ -33,8 +33,11 @@ export class Booking {
   trip: Trip;
 
   @ManyToOne(() => User, { nullable: true, eager: true })
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({ name: 'userId' })
   user?: User | null;
+
+  @Column({ name: 'userId', nullable: true })
+  userId?: string | null;
 
   @Column()
   contactName: string;

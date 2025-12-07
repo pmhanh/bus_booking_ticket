@@ -144,7 +144,7 @@ export const HomeSearchForm = ({
   }, [initialOrigin?.id, initialDestination?.id, initialDate]);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="relative z-50 space-y-4">
       <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
         <div className="relative z-50" ref={originRef}>
           <label className="block text-sm font-medium text-gray-200 mb-1">Điểm đi</label>
@@ -245,6 +245,12 @@ export const HomeSearchForm = ({
               className="w-full appearance-none pl-10 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:left-0 [&::-webkit-calendar-picker-indicator]:top-0"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              onFocus={(e) => {
+                // ensure the calendar pops immediately on focus when supported
+                if (typeof (e.target as HTMLInputElement).showPicker === 'function') {
+                  (e.target as HTMLInputElement).showPicker();
+                }
+              }}
             />
           </div>
         </div>

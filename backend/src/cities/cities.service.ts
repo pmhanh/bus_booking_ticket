@@ -62,14 +62,23 @@ export class CitiesService implements OnModuleInit {
     return { ok: true, count: mapped.length };
   }
 
-  findAll() {
+  private async ensureSeeded() {
+    const count = await this.cityRepo.count();
+    if (count === 0) {
+      await this.syncFromProvincesApiV2();
+    }
+  }
+
+  async findAll() {
+    await this.ensureSeeded();
     return this.cityRepo.find({
       select: ['id', 'name', 'slug', 'code'],
       order: { name: 'ASC' },
     });
   }
 
-  search(query: string, limit = 10) {
+  async search(query: string, limit = 10) {
+    await this.ensureSeeded();
     if (!query) return this.findAll();
     return this.cityRepo.find({
       where: { name: ILike(`%${query}%`) },

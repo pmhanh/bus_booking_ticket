@@ -61,6 +61,21 @@ export const TripDetailsPage = () => {
     if (!contact.phone && user.phone) setContact({ phone: user.phone });
   }, [user, contact.email, contact.name, contact.phone, setContact]);
 
+  const urlParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const searchState = useMemo(
+    () =>
+      (location.state as {
+        search?: {
+          originId?: number;
+          destinationId?: number;
+          date?: string;
+          originName?: string;
+          destinationName?: string;
+        };
+      } | undefined)?.search,
+    [location.state],
+  );
+
   const stops = useMemo(() => trip?.route?.stops?.slice().sort((a, b) => a.order - b.order) || [], [trip]);
   const readyForReview =
     !!trip &&
@@ -93,8 +108,13 @@ export const TripDetailsPage = () => {
           </button>
           <h1 className="text-3xl font-bold text-white">Chi tiết chuyến</h1>
           <p className="text-gray-300 text-sm">Thông tin tuyến, thời gian, loại xe và tiện ích</p>
+          {headerOrigin && headerDestination && headerDate ? (
+            <p className="text-sm text-emerald-100">
+              Đang xem chuyến: {headerOrigin} {'->'} {headerDestination} ngày {headerDate}
+            </p>
+          ) : null}
         </div>
-        <Link to="/search">
+        <Link to={backQuery ? `/search${backQuery}` : '/search'}>
           <Button variant="secondary">Tìm lại</Button>
         </Link>
       </div>

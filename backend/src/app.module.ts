@@ -14,11 +14,14 @@ import { SeatMap } from './seat-maps/seat-map.entity';
 import { SeatDefinition } from './seat-maps/seat-definition.entity';
 import { Bus } from './buses/bus.entity';
 import { Trip } from './trips/trip.entity';
+import { SeatLock } from './trips/seat-lock.entity';
+import { Booking } from './bookings/booking.entity';
 import { CitiesModule } from './cities/cities.module';
 import { RoutesModule } from './routes/routes.module';
 import { SeatMapsModule } from './seat-maps/seat-maps.module';
 import { BusesModule } from './buses/buses.module';
 import { TripsModule } from './trips/trips.module';
+import { BookingsModule } from './bookings/bookings.module';
 
 @Module({
   imports: [
@@ -43,6 +46,8 @@ import { TripsModule } from './trips/trips.module';
             SeatDefinition,
             Bus,
             Trip,
+            SeatLock,
+            Booking,
           ],
           synchronize: true,
         };
@@ -56,6 +61,7 @@ import { TripsModule } from './trips/trips.module';
     SeatMapsModule,
     BusesModule,
     TripsModule,
+    BookingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

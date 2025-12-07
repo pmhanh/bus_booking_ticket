@@ -142,7 +142,14 @@ export const TripDetailsPage = () => {
                     <div className="text-3xl font-bold text-white">{trip.basePrice.toLocaleString()} VND</div>
                     <div className="text-xs text-emerald-50">Giá cơ bản mỗi ghế</div>
                   </div>
-                  <Button>Đặt ngay</Button>
+                  <Link
+                    to={
+                      backQuery ? `/trips/${trip.id}/select-seats${backQuery}` : `/trips/${trip.id}/select-seats`
+                    }
+                    state={{ search: searchState }}
+                  >
+                    <Button>Đặt ngay</Button>
+                  </Link>
                 </div>
                 <div className="text-xs text-emerald-50">
                   Ghế, dịch vụ thêm và thông tin hành khách sẽ chọn trong bước đặt vé.

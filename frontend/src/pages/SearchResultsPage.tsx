@@ -455,7 +455,16 @@ const TripCard = ({ trip, filters }: { trip: Trip; filters: TripSearchParams }) 
                 Details
               </Button>
             </Link>
-            <Button className="px-4">Book</Button>
+            <Link
+              to={
+                detailQuery.toString()
+                  ? `/trips/${trip.id}/select-seats?${detailQuery.toString()}`
+                  : `/trips/${trip.id}/select-seats`
+              }
+              state={{ search: detailState }}
+            >
+              <Button className="px-4">Book</Button>
+            </Link>
           </div>
         </div>
       </div>

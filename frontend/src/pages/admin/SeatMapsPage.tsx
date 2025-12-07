@@ -12,9 +12,16 @@ type SeatCell = {
   isSeat: boolean;
   code?: string;
   price?: number;
+  seatType?: string;
 };
 
 const colLetter = (col: number) => String.fromCharCode(64 + col);
+const SEAT_TYPES = [
+  { value: 'standard', label: 'Tiêu chuẩn' },
+  { value: 'vip', label: 'VIP' },
+  { value: 'double', label: 'Đôi' },
+  { value: 'sleeper', label: 'Giường nằm' },
+];
 
 export const SeatMapsPage = () => {
   const { accessToken } = useAuth();
@@ -30,9 +37,17 @@ export const SeatMapsPage = () => {
 
   const makeCells = useCallback(
     (r: number, c: number, seats?: SeatMap['seats']) => {
-      const lookup = new Map<string, { code: string; price: number; isActive: boolean }>();
+      const lookup = new Map<
+        string,
+        { code: string; price: number; isActive: boolean; seatType?: string }
+      >();
       seats?.forEach((s) =>
-        lookup.set(`${s.row}-${s.col}`, { code: s.code, price: s.price, isActive: s.isActive }),
+        lookup.set(`${s.row}-${s.col}`, {
+          code: s.code,
+          price: s.price,
+          isActive: s.isActive,
+          seatType: s.seatType || 'standard',
+        }),
       );
       const next: SeatCell[] = [];
       for (let i = 1; i <= r; i++) {
@@ -45,6 +60,7 @@ export const SeatMapsPage = () => {
             isSeat: !!found,
             code: found?.code ?? `${i}${colLetter(j)}`,
             price: found?.price ?? basePrice,
+            seatType: found?.seatType ?? 'standard',
           });
         }
       }
@@ -86,11 +102,22 @@ export const SeatMapsPage = () => {
               row: s.row,
               col: s.col,
               price: s.price || basePrice,
+              seatType: s.seatType || 'standard',
               isActive: true,
             })) as SeatMap['seats']
         : undefined;
-      const lookup = new Map<string, { code: string; price: number; isActive: boolean }>();
-      seats?.forEach((s) => lookup.set(`${s.row}-${s.col}`, { code: s.code, price: s.price, isActive: s.isActive }));
+      const lookup = new Map<
+        string,
+        { code: string; price: number; isActive: boolean; seatType?: string }
+      >();
+      seats?.forEach((s) =>
+        lookup.set(`${s.row}-${s.col}`, {
+          code: s.code,
+          price: s.price,
+          isActive: s.isActive,
+          seatType: s.seatType || 'standard',
+        }),
+      );
       const next: SeatCell[] = [];
       for (let i = 1; i <= rows; i++) {
         for (let j = 1; j <= cols; j++) {
@@ -102,6 +129,7 @@ export const SeatMapsPage = () => {
             isSeat: !!found,
             code: found?.code ?? `${i}${colLetter(j)}`,
             price: found?.price ?? basePrice,
+            seatType: found?.seatType ?? 'standard',
           });
         }
       }
@@ -110,6 +138,7 @@ export const SeatMapsPage = () => {
   }, [rows, cols, selectedId, basePrice]);
 
   const toggleCell = (cell: SeatCell) => {
+    let nextSelected: SeatCell | null = null;
     setCells((prev) =>
       prev.map((c) => {
         if (c.row === cell.row && c.col === cell.col) {
@@ -119,15 +148,15 @@ export const SeatMapsPage = () => {
             isSeat,
             code: isSeat ? c.code || `${c.row}${colLetter(c.col)}` : undefined,
             price: isSeat ? c.price ?? basePrice : undefined,
+            seatType: isSeat ? c.seatType || 'standard' : undefined,
           };
+          nextSelected = isSeat ? updated : null;
           return updated;
         }
         return c;
       }),
     );
-    setSelectedCell((prevSel) =>
-      prevSel && prevSel.row === cell.row && prevSel.col === cell.col ? null : cell,
-    );
+    setSelectedCell(nextSelected);
   };
 
   const updateSelectedPrice = (price: number) => {
@@ -142,6 +171,18 @@ export const SeatMapsPage = () => {
     setSelectedCell((prev) => (prev ? { ...prev, price } : prev));
   };
 
+  const updateSelectedSeatType = (seatType: string) => {
+    setCells((prev) =>
+      prev.map((c) => {
+        if (selectedCell && c.row === selectedCell.row && c.col === selectedCell.col) {
+          return { ...c, seatType };
+        }
+        return c;
+      }),
+    );
+    setSelectedCell((prev) => (prev ? { ...prev, seatType } : prev));
+  };
+
   const saveSeatMap = async () => {
     const seatsPayload = cells
       .filter((c) => c.isSeat)
@@ -150,6 +191,7 @@ export const SeatMapsPage = () => {
         row: c.row,
         col: c.col,
         price: c.price ?? basePrice,
+        seatType: c.seatType || 'standard',
         isActive: true,
       }));
     const payload = { name, rows, cols, seats: seatsPayload };
@@ -241,27 +283,44 @@ export const SeatMapsPage = () => {
                 >
                   {cell.isSeat ? cell.code : `${cell.row}${colLetter(cell.col)}`}
                 </button>
-              ))}
-            </div>
-            {selectedCell ? (
-              <div className="mt-3 flex items-center gap-3">
-                <div className="text-sm text-gray-200">
-                  Ghế {selectedCell.row}
-                  {colLetter(selectedCell.col)}
-                </div>
-                <FormField
-                  label="Giá ghế"
-                  type="number"
-                  value={
-                    cells.find((c) => c.row === selectedCell.row && c.col === selectedCell.col)?.price ?? basePrice
-                  }
-                  onChange={(e) => updateSelectedPrice(Number(e.target.value) || 0)}
-                  className="w-32"
-                />
+            ))}
+          </div>
+          {selectedCell ? (
+            <div className="mt-3 grid sm:grid-cols-[1fr_1fr_1fr] gap-3 items-end">
+              <div className="text-sm text-gray-200">
+                Ghế {selectedCell.row}
+                {colLetter(selectedCell.col)}
               </div>
-            ) : (
-              <div className="mt-3 text-sm text-gray-400">Chọn 1 ghế để chỉnh giá.</div>
-            )}
+              <FormField
+                label="Giá ghế"
+                type="number"
+                value={
+                  cells.find((c) => c.row === selectedCell.row && c.col === selectedCell.col)?.price ??
+                  basePrice
+                }
+                onChange={(e) => updateSelectedPrice(Number(e.target.value) || 0)}
+              />
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-400">Loại ghế</label>
+                <select
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none"
+                  value={
+                    cells.find((c) => c.row === selectedCell.row && c.col === selectedCell.col)?.seatType ||
+                    'standard'
+                  }
+                  onChange={(e) => updateSelectedSeatType(e.target.value)}
+                >
+                  {SEAT_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 text-sm text-gray-400">Chọn 1 ghế để chỉnh giá.</div>
+          )}
           </div>
 
           <div className="mt-4 flex gap-2">

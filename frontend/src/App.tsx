@@ -16,6 +16,7 @@ import { SeatMapsPage } from './pages/admin/SeatMapsPage';
 import { HomePage } from './pages/HomePage';
 import { SearchResultsPage } from './pages/SearchResultsPage';
 import { TripDetailsPage } from './pages/TripDetailsPage';
+import { SeatSelectionPage } from './pages/SeatSelectionPage';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
         <Route path="/home" element={<HomePage />} />
         <Route path="/search" element={<SearchResultsPage />} />
         <Route path="/trips/:id" element={<TripDetailsPage />} />
+        <Route path="/trips/:id/select-seats" element={<SeatSelectionPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot" element={<ForgotPasswordPage />} />

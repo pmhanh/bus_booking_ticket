@@ -30,6 +30,9 @@ export class SeatDefinition {
   @Column({ type: 'int' })
   price: number;
 
+  @Column({ default: 'standard' })
+  seatType: string;
+
   @Column({ default: true })
   isActive: boolean;
 }

@@ -3,66 +3,67 @@ import {
   Controller,
   Get,
   Param,
-  ParseIntPipe,
   Patch,
   Post,
-  Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
-import { UpdateBookingDto } from './dto/update-booking.dto';
-import { CancelBookingDto } from './dto/cancel-booking.dto';
+import { LookupBookingDto } from './dto/lookup-booking.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { User } from '../users/user.entity';
+import { JwtPayload } from '../auth/interfaces/jwt-payload';
+
+type AuthedRequest = Request & { user?: JwtPayload };
 
 @Controller('bookings')
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Body() dto: CreateBookingDto, @CurrentUser() user?: User | null) {
-    return this.bookingsService.create(dto, user);
+  create(@Body() dto: CreateBookingDto, @Req() req: AuthedRequest) {
+    const user = req.user as JwtPayload;
+    return this.bookingsService.create(dto, user.sub);
+  }
+
+  @Post('guest')
+  createGuest(@Body() dto: CreateBookingDto) {
+    return this.bookingsService.create(dto);
+  }
+
+  @Get(':reference')
+  get(@Param('reference') reference: string) {
+    return this.bookingsService.getByReference(reference);
+  }
+
+  @Post('lookup')
+  lookup(@Body() dto: LookupBookingDto) {
+    return this.bookingsService.lookup(dto);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('my')
-  myBookings(@CurrentUser() user: User) {
-    return this.bookingsService.listForUser(user.id);
+  @Patch(':reference/confirm')
+  confirm(@Param('reference') reference: string, @Req() req: AuthedRequest) {
+    const user = req.user as JwtPayload;
+    return this.bookingsService.confirm(reference, user.sub);
   }
 
-  @Get('lookup')
-  lookup(@Query('code') code: string, @Query('phone') phone?: string, @Query('email') email?: string) {
-    return this.bookingsService.lookup(code, phone, email);
+  @UseGuards(JwtAuthGuard)
+  @Patch(':reference/cancel')
+  cancel(@Param('reference') reference: string, @Req() req: AuthedRequest) {
+    const user = req.user as JwtPayload;
+    return this.bookingsService.cancel(reference, user.sub);
   }
 
-  @Get('trips/:tripId/seats')
-  seatStatus(@Param('tripId', ParseIntPipe) tripId: number) {
-    return this.bookingsService.getSeatStatusForTrip(tripId);
+  @Get(':reference/ticket')
+  ticket(@Param('reference') reference: string) {
+    return this.bookingsService.ticketContent(reference);
   }
 
-  @UseGuards(OptionalJwtAuthGuard)
-  @Get(':id')
-  get(@Param('id') id: string, @CurrentUser() user?: User | null, @Query('phone') phone?: string, @Query('email') email?: string) {
-    return this.bookingsService.getOne(id, user, phone, email);
-  }
-
-  @UseGuards(OptionalJwtAuthGuard)
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateBookingDto, @CurrentUser() user?: User | null) {
-    return this.bookingsService.update(id, dto, user);
-  }
-
-  @UseGuards(OptionalJwtAuthGuard)
-  @Post(':id/cancel')
-  cancel(
-    @Param('id') id: string,
-    @Body() dto: CancelBookingDto,
-    @CurrentUser() user?: User | null,
-  ) {
-    return this.bookingsService.cancel(id, dto, user);
+  @Post(':reference/send-ticket')
+  sendTicket(@Param('reference') reference: string) {
+    return this.bookingsService.sendTicket(reference);
   }
 }

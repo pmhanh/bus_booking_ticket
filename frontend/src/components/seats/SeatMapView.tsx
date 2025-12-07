@@ -1,0 +1,131 @@
+import { useMemo } from 'react';
+import clsx from 'clsx';
+import type { SeatAvailability, SeatWithState } from '../../types/seatMap';
+
+const seatTypeStyles: Record<
+  string,
+  { label: string; bg: string; border: string; text?: string }
+> = {
+  standard: {
+    label: 'Tiêu chuẩn',
+    bg: 'from-emerald-500/70 to-teal-500/70',
+    border: 'border-emerald-200/60',
+  },
+  vip: {
+    label: 'VIP',
+    bg: 'from-amber-500/80 to-pink-500/70',
+    border: 'border-amber-200/80',
+  },
+  double: {
+    label: 'Đôi',
+    bg: 'from-sky-500/70 to-indigo-500/70',
+    border: 'border-sky-200/80',
+  },
+  sleeper: {
+    label: 'Giường nằm',
+    bg: 'from-purple-500/70 to-violet-500/70',
+    border: 'border-purple-200/80',
+  },
+};
+
+type SeatMapViewProps = {
+  seatMap: SeatAvailability['seatMap'];
+  seats: SeatWithState[];
+  selected: string[];
+  onToggle: (seat: SeatWithState) => void;
+};
+
+export const SeatMapView = ({ seatMap, seats, selected, onToggle }: SeatMapViewProps) => {
+  const seatLookup = useMemo(() => {
+    const map = new Map<string, SeatWithState>();
+    seats.forEach((s) => map.set(`${s.row}-${s.col}`, s));
+    return map;
+  }, [seats]);
+
+  const cells = [];
+  for (let i = 1; i <= seatMap.rows; i++) {
+    for (let j = 1; j <= seatMap.cols; j++) {
+      const seat = seatLookup.get(`${i}-${j}`);
+      if (!seat) {
+        cells.push(
+          <div
+            key={`${i}-${j}`}
+            className="h-14 rounded-xl border border-dashed border-white/10 bg-white/5"
+          />,
+        );
+        continue;
+      }
+
+      const isSelected = selected.includes(seat.code);
+      const isDisabled = seat.status === 'locked' || seat.status === 'inactive';
+      const palette = seatTypeStyles[seat.seatType || 'standard'] || seatTypeStyles.standard;
+      const statusClass =
+        seat.status === 'inactive'
+          ? 'bg-white/5 border-white/10 text-gray-600 cursor-not-allowed'
+          : seat.status === 'locked'
+            ? 'bg-slate-800 border-rose-400/40 text-rose-200 cursor-not-allowed'
+            : clsx(
+                `bg-gradient-to-br ${palette.bg} border ${palette.border} text-white`,
+                seat.status === 'held' ? 'ring-2 ring-amber-300/80 shadow-lg' : '',
+                isSelected ? 'ring-2 ring-emerald-200 shadow-xl scale-[1.02]' : '',
+              );
+
+      cells.push(
+        <button
+          key={`${i}-${j}`}
+          className={clsx(
+            'h-14 rounded-xl border text-sm font-semibold flex flex-col items-center justify-center transition-all duration-150 focus:outline-none',
+            statusClass,
+          )}
+          disabled={isDisabled}
+          onClick={() => onToggle(seat)}
+        >
+          <span className="leading-none">{seat.code}</span>
+          <span className="text-[11px] font-medium opacity-80">
+            {seat.price.toLocaleString()}đ
+          </span>
+        </button>,
+      );
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div
+        className="grid"
+        style={{
+          gridTemplateColumns: `repeat(${seatMap.cols}, minmax(0,1fr))`,
+          gap: '10px',
+        }}
+      >
+        {cells}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-3 text-xs">
+        <div className="flex flex-wrap gap-2">
+          <LegendChip color="bg-emerald-500/80" label="Ghế trống" />
+          <LegendChip color="bg-amber-400/80" label="Ghế bạn đang giữ" />
+          <LegendChip color="bg-rose-500/70" label="Ghế bị khóa" />
+          <LegendChip color="bg-slate-500/60" label="Không bán" />
+          <LegendChip color="bg-emerald-200/50 border border-emerald-200/70" label="Đang chọn" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(seatTypeStyles).map(([key, value]) => (
+            <LegendChip key={key} color={`bg-gradient-to-r ${value.bg}`} label={value.label} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LegendChip = ({ color, label }: { color: string; label: string }) => (
+  <span
+    className={clsx(
+      'px-3 py-1 rounded-full text-[11px] uppercase tracking-wide border border-white/10 text-white/90',
+      color,
+    )}
+  >
+    {label}
+  </span>
+);

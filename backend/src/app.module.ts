@@ -14,6 +14,7 @@ import { SeatMap } from './seat-maps/seat-map.entity';
 import { SeatDefinition } from './seat-maps/seat-definition.entity';
 import { Bus } from './buses/bus.entity';
 import { Trip } from './trips/trip.entity';
+import { SeatLock } from './trips/seat-lock.entity';
 import { Booking } from './bookings/booking.entity';
 import { CitiesModule } from './cities/cities.module';
 import { RoutesModule } from './routes/routes.module';
@@ -45,6 +46,7 @@ import { BookingsModule } from './bookings/bookings.module';
             SeatDefinition,
             Bus,
             Trip,
+            SeatLock,
             Booking,
           ],
           synchronize: true,

@@ -6,10 +6,18 @@ import { TripsPublicController } from './trips-public.controller';
 import { Trip } from './trip.entity';
 import { Route } from '../routes/route.entity';
 import { Bus } from '../buses/bus.entity';
+import { SeatMap } from '../seat-maps/seat-map.entity';
+import { SeatLock } from './seat-lock.entity';
+import { TripSeatsService } from './trip-seats.service';
+import { TripSeatsController } from './trip-seats.controller';
+import { Booking } from '../bookings/booking.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Trip, Route, Bus])],
-  providers: [TripsService],
-  controllers: [TripsController, TripsPublicController],
+  imports: [
+    TypeOrmModule.forFeature([Trip, Route, Bus, SeatMap, SeatLock, Booking]),
+  ],
+  providers: [TripsService, TripSeatsService],
+  controllers: [TripsController, TripsPublicController, TripSeatsController],
+  exports: [TripSeatsService],
 })
 export class TripsModule {}

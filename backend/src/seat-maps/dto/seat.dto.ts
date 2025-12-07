@@ -1,12 +1,15 @@
 import {
   IsBoolean,
   IsInt,
+  IsIn,
   IsOptional,
   IsPositive,
   IsString,
-  Max,
   Min,
 } from 'class-validator';
+
+export const SEAT_TYPES = ['standard', 'vip', 'double', 'sleeper'] as const;
+export type SeatType = (typeof SEAT_TYPES)[number];
 
 export class SeatDto {
   @IsString()
@@ -23,6 +26,10 @@ export class SeatDto {
   @IsInt()
   @IsPositive()
   price: number;
+
+  @IsOptional()
+  @IsIn(SEAT_TYPES)
+  seatType?: SeatType;
 
   @IsOptional()
   @IsBoolean()

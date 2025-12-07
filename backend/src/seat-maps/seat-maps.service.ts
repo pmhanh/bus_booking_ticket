@@ -48,6 +48,7 @@ export class SeatMapsService {
         row: s.row,
         col: s.col,
         price: s.price,
+        seatType: s.seatType ?? 'standard',
         isActive: s.isActive ?? true,
       }),
     );
@@ -88,6 +89,7 @@ export class SeatMapsService {
           row: s.row,
           col: s.col,
           price: s.price,
+          seatType: s.seatType ?? 'standard',
           isActive: s.isActive ?? true,
         }),
       );

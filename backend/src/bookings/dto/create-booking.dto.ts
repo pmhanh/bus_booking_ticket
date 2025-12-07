@@ -2,56 +2,43 @@ import {
   ArrayNotEmpty,
   IsArray,
   IsEmail,
-  IsNotEmpty,
-  IsNumber,
+  IsInt,
   IsOptional,
-  IsPhoneNumber,
+  IsPositive,
   IsString,
+  Length,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-
-export class BookingPassengerDto {
-  @IsString()
-  @IsNotEmpty()
-  seatCode!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  name!: string;
-
-  @IsOptional()
-  @IsString()
-  phone?: string;
-
-  @IsOptional()
-  @IsString()
-  idNumber?: string;
-
-  @IsOptional()
-  price?: number;
-}
+import { PassengerDto } from './passenger.dto';
 
 export class CreateBookingDto {
-  @Type(() => Number)
-  @IsNumber()
-  tripId!: number;
-
-  @IsString()
-  @IsNotEmpty()
-  contactName!: string;
-
-  @IsOptional()
-  @IsEmail()
-  contactEmail?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  contactPhone!: string;
+  @IsInt()
+  @IsPositive()
+  tripId: number;
 
   @IsArray()
   @ArrayNotEmpty()
+  @IsString({ each: true })
+  seats: string[];
+
+  @IsString()
+  @Length(2, 120)
+  contactName: string;
+
+  @IsEmail()
+  contactEmail: string;
+
+  @IsOptional()
+  @IsString()
+  contactPhone?: string;
+
+  @IsOptional()
   @ValidateNested({ each: true })
-  @Type(() => BookingPassengerDto)
-  seats!: BookingPassengerDto[];
+  @Type(() => PassengerDto)
+  passengers?: PassengerDto[];
+
+  @IsOptional()
+  @IsString()
+  lockToken?: string;
 }

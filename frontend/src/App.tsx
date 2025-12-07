@@ -16,6 +16,9 @@ import { SeatMapsPage } from './pages/admin/SeatMapsPage';
 import { HomePage } from './pages/HomePage';
 import { SearchResultsPage } from './pages/SearchResultsPage';
 import { TripDetailsPage } from './pages/TripDetailsPage';
+import { BookingReviewPage } from './pages/BookingReviewPage';
+import { BookingTicketPage } from './pages/BookingTicketPage';
+import { BookingsPage } from './pages/BookingsPage';
 
 function App() {
   return (
@@ -30,6 +33,9 @@ function App() {
         <Route path="/forgot" element={<ForgotPasswordPage />} />
         <Route path="/reset" element={<ResetPasswordPage />} />
         <Route path="/verify" element={<VerifyPage />} />
+        <Route path="/bookings" element={<BookingsPage />} />
+        <Route path="/bookings/review" element={<BookingReviewPage />} />
+        <Route path="/bookings/:id/ticket" element={<BookingTicketPage />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/profile" element={<ProfilePage />} />

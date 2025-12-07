@@ -4,7 +4,13 @@ import { Button } from '../ui/Button';
 import { searchCities, type CityOption } from '../../api/cities';
 
 type HomeSearchFormProps = {
-  onSubmit?: (params: { originId: number; destinationId: number; date: string }) => void;
+  onSubmit?: (params: {
+    originId: number;
+    destinationId: number;
+    date: string;
+    originName: string;
+    destinationName: string;
+  }) => void;
   initialOrigin?: { id: number; name: string };
   initialDestination?: { id: number; name: string };
   initialDate?: string;
@@ -98,12 +104,14 @@ export const HomeSearchForm = ({
     setError('');
     const originId = origin.state.selected?.id;
     const destinationId = destination.state.selected?.id;
+    const originName = origin.state.selected?.name || '';
+    const destinationName = destination.state.selected?.name || '';
     if (!originId || !destinationId || !date) {
       setError('Vui lòng chọn điểm đi, điểm đến và ngày khởi hành.');
       return;
     }
     if (onSubmit) {
-      onSubmit({ originId, destinationId, date });
+      onSubmit({ originId, destinationId, date, originName, destinationName });
     } else {
       navigate(`/search?originId=${originId}&destinationId=${destinationId}&date=${date}`);
     }
@@ -138,7 +146,7 @@ export const HomeSearchForm = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
-        <div className="relative" ref={originRef}>
+        <div className="relative z-50" ref={originRef}>
           <label className="block text-sm font-medium text-gray-200 mb-1">Điểm đi</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-300">
@@ -163,7 +171,7 @@ export const HomeSearchForm = ({
             />
           </div>
           {origin.state.open && origin.state.options.length > 0 && (
-            <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
+            <div className="absolute left-0 right-0 z-50 mt-1 bg-slate-900/95 backdrop-blur border border-white/10 rounded-lg shadow-xl max-h-60 overflow-auto pr-1">
               {origin.state.options.map((opt) => (
                 <div
                   key={opt.id}
@@ -177,7 +185,7 @@ export const HomeSearchForm = ({
           )}
         </div>
 
-        <div className="relative" ref={destinationRef}>
+        <div className="relative z-50" ref={destinationRef}>
           <label className="block text-sm font-medium text-gray-200 mb-1">Điểm đến</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-300">
@@ -202,7 +210,7 @@ export const HomeSearchForm = ({
             />
           </div>
           {destination.state.open && destination.state.options.length > 0 && (
-            <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-white/10 rounded-lg shadow-lg max-h-60 overflow-auto">
+            <div className="absolute left-0 right-0 z-50 mt-1 bg-slate-900/95 backdrop-blur border border-white/10 rounded-lg shadow-xl max-h-60 overflow-auto pr-1">
               {destination.state.options.map((opt) => (
                 <div
                   key={opt.id}
@@ -234,7 +242,7 @@ export const HomeSearchForm = ({
             </span>
             <input
               type="date"
-              className="w-full appearance-none pl-10 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              className="w-full appearance-none pl-10 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:left-0 [&::-webkit-calendar-picker-indicator]:top-0"
               value={date}
               onChange={(e) => setDate(e.target.value)}
             />
@@ -251,3 +259,5 @@ export const HomeSearchForm = ({
     </form>
   );
 };
+
+

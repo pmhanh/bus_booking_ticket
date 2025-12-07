@@ -1,0 +1,42 @@
+import type { Trip } from './trip';
+
+export type BookingPassenger = {
+  seatCode: string;
+  name: string;
+  phone?: string;
+  idNumber?: string;
+  price: number;
+};
+
+export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+
+export type Booking = {
+  id: string;
+  referenceCode: string;
+  trip: Trip;
+  contactName: string;
+  contactEmail?: string | null;
+  contactPhone: string;
+  passengers: BookingPassenger[];
+  totalPrice: number;
+  status: BookingStatus;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type SeatStatus = {
+  code: string;
+  row: number;
+  col: number;
+  price: number;
+  isActive: boolean;
+  status: 'available' | 'reserved' | 'booked';
+  bookedBy?: string;
+  bookingId?: string;
+};
+
+export type SeatStatusResponse = {
+  seatMap: { id: number; name: string; rows: number; cols: number } | null;
+  seats: SeatStatus[];
+  basePrice: number;
+};

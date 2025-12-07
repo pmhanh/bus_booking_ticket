@@ -6,6 +6,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { searchTrips, type TripSearchParams, type TripSearchResponse } from '../api/trips';
 import type { Trip } from '../types/trip';
+import { RangeSlider } from '../components/ui/RangeSlider';
 
 const BUS_TYPES: { value: string; label: string }[] = [
   { value: 'STANDARD', label: 'Tiêu chuẩn' },
@@ -76,6 +77,8 @@ const toTimeString = (minutes: number) => {
 export const SearchResultsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => parseSearchParams(searchParams), [searchParams]);
+  const originNameParam = searchParams.get('originName') || undefined;
+  const destinationNameParam = searchParams.get('destinationName') || undefined;
   const [result, setResult] = useState<TripSearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,14 +112,22 @@ export const SearchResultsPage = () => {
 
   const prefill = useMemo(() => {
     const trip = result?.data?.[0];
+    const originName = originNameParam || trip?.route.originCity.name;
+    const destinationName = destinationNameParam || trip?.route.destinationCity.name;
     return {
-      origin: trip ? { id: trip.route.originCity.id, name: trip.route.originCity.name } : undefined,
-      destination: trip
-        ? { id: trip.route.destinationCity.id, name: trip.route.destinationCity.name }
-        : undefined,
+      origin:
+        filters.originId && originName ? { id: filters.originId, name: originName } : trip
+          ? { id: trip.route.originCity.id, name: trip.route.originCity.name }
+          : undefined,
+      destination:
+        filters.destinationId && destinationName
+          ? { id: filters.destinationId, name: destinationName }
+          : trip
+            ? { id: trip.route.destinationCity.id, name: trip.route.destinationCity.name }
+            : undefined,
       date: filters.date,
     };
-  }, [result, filters.date]);
+  }, [result, filters.originId, filters.destinationId, filters.date, originNameParam, destinationNameParam]);
 
   const startMinutes = toMinutes(filters.startTime) ?? 0;
   const endMinutes = toMinutes(filters.endTime) ?? 1440;
@@ -125,7 +136,7 @@ export const SearchResultsPage = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
-      <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-emerald-800/40 p-6 md:p-10 shadow-xl">
+      <section className="relative z-30 overflow-visible rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-emerald-800/40 p-6 md:p-10 shadow-xl">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -left-10 -top-10 h-40 w-40 bg-emerald-500/20 blur-3xl" />
           <div className="absolute right-10 top-10 h-24 w-24 bg-blue-500/20 blur-3xl" />
@@ -153,7 +164,9 @@ export const SearchResultsPage = () => {
                 onSubmit={(params) => {
                   const next = new URLSearchParams(searchParams);
                   next.set('originId', String(params.originId));
+                  next.set('originName', params.originName);
                   next.set('destinationId', String(params.destinationId));
+                  next.set('destinationName', params.destinationName);
                   next.set('date', params.date);
                   next.set('page', '1');
                   setSearchParams(next);
@@ -164,7 +177,7 @@ export const SearchResultsPage = () => {
         </div>
       </section>
 
-      <div className="grid lg:grid-cols-[320px_1fr] gap-4">
+      <div className="relative z-10 grid lg:grid-cols-[320px_1fr] gap-4">
         <Card title="Filters" className="h-fit sticky top-24">
           <div className="space-y-6 text-sm text-gray-100">
             <div>
@@ -181,26 +194,20 @@ export const SearchResultsPage = () => {
                 </button>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min={0}
-                    max={1440}
-                    step={15}
-                    value={startMinutes}
-                    onChange={(e) => updateParam('startTime', toTimeString(Number(e.target.value)))}
-                    className="flex-1 accent-emerald-400"
-                  />
-                  <input
-                    type="range"
-                    min={0}
-                    max={1440}
-                    step={15}
-                    value={endMinutes}
-                    onChange={(e) => updateParam('endTime', toTimeString(Number(e.target.value)))}
-                    className="flex-1 accent-emerald-400"
-                  />
-                </div>
+                <RangeSlider
+                  min={0}
+                  max={1440}
+                  step={15}
+                  value={[startMinutes, endMinutes]}
+                  onChange={([from, to]) => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set('startTime', toTimeString(from));
+                    next.set('endTime', toTimeString(to));
+                    next.set('page', '1');
+                    setSearchParams(next);
+                  }}
+                />
+
                 <div className="flex items-center justify-between text-xs text-gray-300">
                   <span>Từ: {toTimeString(startMinutes)}</span>
                   <span>Đến: {toTimeString(endMinutes)}</span>
@@ -222,26 +229,20 @@ export const SearchResultsPage = () => {
                 </button>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min={0}
-                    max={2000000}
-                    step={50000}
-                    value={minPrice}
-                    onChange={(e) => updateParam('minPrice', Number(e.target.value))}
-                    className="flex-1 accent-emerald-400"
-                  />
-                  <input
-                    type="range"
-                    min={0}
-                    max={2000000}
-                    step={50000}
-                    value={maxPrice}
-                    onChange={(e) => updateParam('maxPrice', Number(e.target.value))}
-                    className="flex-1 accent-emerald-400"
-                  />
-                </div>
+                <RangeSlider
+                  min={0}
+                  max={2000000}
+                  step={50000}
+                  value={[minPrice, maxPrice]}
+                  onChange={([from, to]) => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set('minPrice', String(from));
+                    next.set('maxPrice', String(to));
+                    next.set('page', '1');
+                    setSearchParams(next);
+                  }}
+                />
+
                 <div className="flex items-center justify-between text-xs text-gray-300">
                   <span>Từ: {minPrice.toLocaleString()} đ</span>
                   <span>Đến: {maxPrice.toLocaleString()} đ</span>
@@ -349,7 +350,7 @@ export const SearchResultsPage = () => {
           {error ? <Card className="text-red-200 text-sm">{error}</Card> : null}
 
           {!loading && !error && result?.data?.length
-            ? result.data.map((trip) => <TripCard key={trip.id} trip={trip} />)
+            ? result.data.map((trip) => <TripCard key={trip.id} trip={trip} filters={filters} />)
             : null}
 
           {!loading && !error && result && result.data.length === 0 ? (
@@ -387,8 +388,25 @@ export const SearchResultsPage = () => {
   );
 };
 
-const TripCard = ({ trip }: { trip: Trip }) => {
+const TripCard = ({ trip, filters }: { trip: Trip; filters: TripSearchParams }) => {
   const duration = formatDuration(trip.durationMinutes);
+  const detailState = {
+    originId: filters.originId ?? trip.route.originCity.id,
+    destinationId: filters.destinationId ?? trip.route.destinationCity.id,
+    date: filters.date ?? trip.departureTime?.split('T')[0],
+    originName: trip.route.originCity.name,
+    destinationName: trip.route.destinationCity.name,
+  };
+  const detailQuery = new URLSearchParams();
+  if (detailState.originId) {
+    detailQuery.set('originId', String(detailState.originId));
+    detailQuery.set('originName', detailState.originName);
+  }
+  if (detailState.destinationId) {
+    detailQuery.set('destinationId', String(detailState.destinationId));
+    detailQuery.set('destinationName', detailState.destinationName);
+  }
+  if (detailState.date) detailQuery.set('date', detailState.date);
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur px-4 py-4 md:px-6 md:py-5 shadow-card">
       <div className="grid md:grid-cols-[1fr_auto] gap-4 items-center">
@@ -435,12 +453,20 @@ const TripCard = ({ trip }: { trip: Trip }) => {
             <div className="text-2xl font-bold text-emerald-200">{currency(trip.basePrice)}</div>
           </div>
           <div className="flex gap-2">
-            <Link to={`/trips/${trip.id}`}>
+            <Link
+              to={detailQuery.toString() ? `/trips/${trip.id}?${detailQuery.toString()}` : `/trips/${trip.id}`}
+              state={{ search: detailState }}
+            >
               <Button variant="secondary" className="px-4">
                 Details
               </Button>
             </Link>
-            <Button className="px-4">Book</Button>
+            <Link
+              to={detailQuery.toString() ? `/trips/${trip.id}?${detailQuery.toString()}` : `/trips/${trip.id}`}
+              state={{ search: detailState, jumpToBooking: true }}
+            >
+              <Button className="px-4">Book</Button>
+            </Link>
           </div>
         </div>
       </div>

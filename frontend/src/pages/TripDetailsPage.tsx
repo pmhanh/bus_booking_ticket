@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getTripById } from '../api/trips';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { FormField } from '../components/ui/FormField';
 import type { Trip } from '../types/trip';
+import { SeatSelector } from '../components/booking/SeatSelector';
+import { useBooking } from '../context/BookingContext';
+import { useAuth } from '../context/AuthContext';
 
 const formatTime = (date: string) =>
   new Date(date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -21,20 +25,64 @@ const formatDuration = (minutes?: number) => {
 export const TripDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [trip, setTrip] = useState<Trip | null>(null);
+  const location = useLocation();
+  const [trip, setTripData] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const {
+    setTrip: setBookingTrip,
+    selectedSeats,
+    passengers,
+    contact,
+    toggleSeat,
+    updatePassenger,
+    setContact,
+    totalPrice,
+  } = useBooking();
+  const { user } = useAuth();
+  const bookingSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
     getTripById(Number(id))
-      .then(setTrip)
+      .then((data) => {
+        setTripData(data);
+        setBookingTrip(data);
+      })
       .catch((err) => setError(err.message || 'Unable to load trip'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, setBookingTrip]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (!contact.name && (user.fullName || user.email)) setContact({ name: user.fullName || user.email || '' });
+    if (!contact.email && user.email) setContact({ email: user.email });
+    if (!contact.phone && user.phone) setContact({ phone: user.phone });
+  }, [user, contact.email, contact.name, contact.phone, setContact]);
 
   const stops = useMemo(() => trip?.route?.stops?.slice().sort((a, b) => a.order - b.order) || [], [trip]);
+  const readyForReview =
+    !!trip &&
+    selectedSeats.length > 0 &&
+    passengers.every((p) => p.name.trim()) &&
+    contact.name.trim().length > 0 &&
+    (contact.phone?.trim() || contact.email?.trim());
+
+  const handleSeatToggle = (seat: { code: string; price: number; status?: string }) => {
+    if (seat.status && seat.status !== 'available' && !selectedSeats.find((s) => s.code === seat.code)) return;
+    toggleSeat({ code: seat.code, price: seat.price });
+    if (bookingSectionRef.current) {
+      bookingSectionRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    const state = location.state as { jumpToBooking?: boolean } | undefined;
+    if (state?.jumpToBooking && bookingSectionRef.current) {
+      bookingSectionRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [location.state]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -106,7 +154,9 @@ export const TripDetailsPage = () => {
                     <div className="text-3xl font-bold text-white">{trip.basePrice.toLocaleString()} VND</div>
                     <div className="text-xs text-emerald-50">Giá cơ bản mỗi ghế</div>
                   </div>
-                  <Button>Đặt ngay</Button>
+                  <Button onClick={() => bookingSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+                    Đặt ngay
+                  </Button>
                 </div>
                 <div className="text-xs text-emerald-50">
                   Ghế, dịch vụ thêm và thông tin hành khách sẽ chọn trong bước đặt vé.
@@ -114,6 +164,124 @@ export const TripDetailsPage = () => {
               </div>
             </div>
           </Card>
+
+          <div ref={bookingSectionRef} className="grid lg:grid-cols-[1.4fr_0.6fr] gap-4">
+            <Card title="Chọn ghế & hành khách">
+              <SeatSelector
+                tripId={trip.id}
+                selected={selectedSeats.map((s) => s.code)}
+                onToggle={(seat) => handleSeatToggle({ code: seat.code, price: seat.price, status: seat.status })}
+              />
+
+              <div className="mt-4 space-y-3">
+                {selectedSeats.length === 0 ? (
+                  <div className="text-sm text-gray-300">
+                    Chọn ghế đang trống để điền thông tin hành khách. Trạng thái ghế tự động cập nhật mỗi vài giây.
+                  </div>
+                ) : (
+                  selectedSeats.map((seat) => {
+                    const passenger =
+                      passengers.find((p) => p.seatCode === seat.code) || ({ seatCode: seat.code, name: '' } as const);
+                    const seatPrice = passenger.price ?? seat.price ?? trip.basePrice;
+                    return (
+                      <div
+                        key={seat.code}
+                        className="rounded-xl border border-white/10 bg-white/5 p-3 grid md:grid-cols-4 gap-3 items-end"
+                      >
+                        <div className="md:col-span-4 flex items-center justify-between">
+                          <div className="text-sm text-white font-semibold">Ghế {seat.code}</div>
+                          <div className="text-xs text-emerald-200">
+                            {seatPrice.toLocaleString()} đ · Liên tục giữ 5s / lần
+                          </div>
+                        </div>
+                        <FormField
+                          label="Họ tên hành khách"
+                          value={passenger.name}
+                          placeholder="Ví dụ: Tran An"
+                          onChange={(e) => updatePassenger(seat.code, { name: e.target.value })}
+                          className="md:col-span-2"
+                        />
+                        <FormField
+                          label="Số điện thoại"
+                          value={passenger.phone || ''}
+                          placeholder="Tuỳ chọn"
+                          onChange={(e) => updatePassenger(seat.code, { phone: e.target.value })}
+                        />
+                        <FormField
+                          label="CCCD/Passport"
+                          value={passenger.idNumber || ''}
+                          placeholder="Tuỳ chọn"
+                          onChange={(e) => updatePassenger(seat.code, { idNumber: e.target.value })}
+                        />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </Card>
+
+            <Card title="Thông tin liên hệ & tóm tắt">
+              <div className="space-y-3">
+                <div className="grid md:grid-cols-2 gap-3">
+                  <FormField
+                    label="Người liên hệ"
+                    value={contact.name}
+                    placeholder="Tên để chúng tôi liên hệ"
+                    onChange={(e) => setContact({ name: e.target.value })}
+                  />
+                  <FormField
+                    label="Email"
+                    type="email"
+                    value={contact.email || ''}
+                    placeholder="Nhận e-ticket"
+                    onChange={(e) => setContact({ email: e.target.value })}
+                  />
+                  <FormField
+                    label="Số điện thoại"
+                    value={contact.phone || ''}
+                    placeholder="Bắt buộc để hỗ trợ"
+                    onChange={(e) => setContact({ phone: e.target.value })}
+                  />
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2 text-sm text-gray-200">
+                  <div className="flex items-center justify-between text-gray-400 text-xs uppercase">
+                    <span>Hành khách</span>
+                    <span>Giá</span>
+                  </div>
+                  {passengers.length ? (
+                    passengers.map((p) => (
+                      <div key={p.seatCode} className="flex items-center justify-between">
+                        <div className="text-white">
+                          {p.name || 'Chưa nhập'} · Ghế {p.seatCode}
+                        </div>
+                        <div className="text-emerald-200">{(p.price ?? trip.basePrice).toLocaleString()} đ</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-gray-400">Chưa có hành khách.</div>
+                  )}
+                  <div className="pt-2 border-t border-white/5 flex items-center justify-between text-white font-semibold">
+                    <span>Tạm tính</span>
+                    <span>{totalPrice.toLocaleString()} đ</span>
+                  </div>
+                </div>
+
+                <Button
+                  disabled={!readyForReview}
+                  onClick={() => navigate('/bookings/review', { state: { fromTrip: trip.id } })}
+                  className="w-full"
+                >
+                  Xem lại & thanh toán
+                </Button>
+                {!readyForReview ? (
+                  <div className="text-xs text-gray-400 text-center">
+                    Cần chọn ghế, nhập tên hành khách và thông tin liên hệ để tiếp tục.
+                  </div>
+                ) : null}
+              </div>
+            </Card>
+          </div>
 
           <div className="grid md:grid-cols-[1.2fr_0.8fr] gap-4">
             <Card title="Lộ trình">

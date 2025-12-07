@@ -240,6 +240,7 @@ export class TripsService {
         'route.stops.city',
         'bus',
         'bus.seatMap',
+        'bus.seatMap.seats',
       ],
     });
     if (!trip) throw new NotFoundException('Trip not found');

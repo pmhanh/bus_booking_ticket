@@ -66,8 +66,6 @@ export const SeatSelectionPage = () => {
 
   useEffect(() => {
     loadAvailability(true);
-    const interval = window.setInterval(() => loadAvailability(false), 15000);
-    return () => window.clearInterval(interval);
   }, [loadAvailability]);
 
   useEffect(() => {

@@ -12,6 +12,7 @@ import { Trip } from './trip.entity';
 
 @Entity({ name: 'seat_locks' })
 @Index(['trip', 'seatCode'])
+@Index(['lockToken'])
 export class SeatLock {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -29,8 +30,14 @@ export class SeatLock {
   @Column({ nullable: true })
   userId?: string;
 
+  @Column({ nullable: true })
+  guestSessionId?: string;
+
   @Column({ type: 'uuid' })
   lockToken: string;
+
+  @Column({ type: 'varchar', default: 'ACTIVE' })
+  status: 'ACTIVE' | 'USED' | 'EXPIRED' | 'RELEASED';
 
   @CreateDateColumn()
   createdAt: Date;

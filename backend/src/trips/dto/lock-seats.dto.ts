@@ -22,4 +22,8 @@ export class LockSeatsDto {
   @IsOptional()
   @IsUUID()
   lockToken?: string;
+
+  @IsOptional()
+  @IsString()
+  guestSessionId?: string;
 }

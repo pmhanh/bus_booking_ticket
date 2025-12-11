@@ -1,7 +1,7 @@
 import type { Route } from './route';
 import type { Bus } from './bus';
 
-export type SeatStatus = 'available' | 'locked' | 'held' | 'inactive';
+export type SeatStatus = 'available' | 'locked' | 'held' | 'inactive' | 'booked';
 
 export type SeatDefinition = {
   id: number;

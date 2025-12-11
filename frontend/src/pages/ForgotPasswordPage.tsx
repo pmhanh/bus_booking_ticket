@@ -9,14 +9,27 @@ import { apiClient } from '../lib/api';
 export const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
+  const [fieldError, setFieldError] = useState('');
+  const [error, setError] = useState('');
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    await apiClient('/auth/forgot', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    });
-    setSent(true);
+    setError('');
+    setSent(false);
+    if (!email.trim()) {
+      setFieldError('Vui long nhap email');
+      return;
+    }
+    setFieldError('');
+    try {
+      await apiClient('/auth/forgot', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+      setSent(true);
+    } catch (err) {
+      setError((err as Error)?.message || 'Khong the gui email khoi phuc');
+    }
   };
 
   return (
@@ -28,8 +41,13 @@ export const ForgotPasswordPage = () => {
             type="email"
             required
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (fieldError) setFieldError('');
+            }}
+            error={fieldError}
           />
+          {error ? <div className="text-error text-sm">{error}</div> : null}
           <Button type="submit" className="w-full">
             Send reset link
           </Button>

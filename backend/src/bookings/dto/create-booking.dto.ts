@@ -41,4 +41,8 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   lockToken?: string;
+
+  @IsOptional()
+  @IsString()
+  guestSessionId?: string;
 }

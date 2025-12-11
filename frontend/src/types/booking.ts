@@ -15,7 +15,7 @@ export type PassengerInput = {
   idNumber?: string;
 };
 
-export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'EXPIRED';
 
 export type Booking = {
   id: string;
@@ -37,7 +37,7 @@ export type SeatStatus = {
   col: number;
   price: number;
   isActive: boolean;
-  status: 'available' | 'reserved' | 'booked';
+  status: 'available' | 'reserved' | 'booked' | 'locked';
   bookedBy?: string;
   bookingId?: string;
 };

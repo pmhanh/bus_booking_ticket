@@ -33,14 +33,25 @@ type SeatMapViewProps = {
   seats: SeatWithState[];
   selected: string[];
   onToggle: (seat: SeatWithState) => void;
+  maxSelectable?: number;
+  activeLockToken?: string;
 };
 
-export const SeatMapView = ({ seatMap, seats, selected, onToggle }: SeatMapViewProps) => {
+export const SeatMapView = ({
+  seatMap,
+  seats,
+  selected,
+  onToggle,
+  maxSelectable,
+  activeLockToken,
+}: SeatMapViewProps) => {
   const seatLookup = useMemo(() => {
     const map = new Map<string, SeatWithState>();
     seats.forEach((s) => map.set(`${s.row}-${s.col}`, s));
     return map;
   }, [seats]);
+
+  const limitReached = maxSelectable !== undefined && selected.length >= maxSelectable;
 
   const cells = [];
   for (let i = 1; i <= seatMap.rows; i++) {
@@ -57,18 +68,28 @@ export const SeatMapView = ({ seatMap, seats, selected, onToggle }: SeatMapViewP
       }
 
       const isSelected = selected.includes(seat.code);
-      const isDisabled = seat.status === 'locked' || seat.status === 'inactive';
+      const isBooked = seat.status === 'booked';
+      const isLocked =
+        seat.status === 'locked' &&
+        (!activeLockToken || (seat.lockToken && seat.lockToken !== activeLockToken));
+      const isDisabled =
+        isBooked ||
+        isLocked ||
+        seat.status === 'inactive' ||
+        (limitReached && !isSelected && seat.status !== 'held');
       const palette = seatTypeStyles[seat.seatType || 'standard'] || seatTypeStyles.standard;
       const statusClass =
         seat.status === 'inactive'
           ? 'bg-white/5 border-white/10 text-gray-600 cursor-not-allowed'
-          : seat.status === 'locked'
-            ? 'bg-slate-800 border-rose-400/40 text-rose-200 cursor-not-allowed'
-            : clsx(
-                `bg-gradient-to-br ${palette.bg} border ${palette.border} text-white`,
-                seat.status === 'held' ? 'ring-2 ring-amber-300/80 shadow-lg' : '',
-                isSelected ? 'ring-2 ring-emerald-200 shadow-xl scale-[1.02]' : '',
-              );
+          : isBooked
+            ? 'bg-rose-600/70 border-rose-300/60 text-white cursor-not-allowed'
+            : seat.status === 'locked'
+              ? 'bg-slate-800 border-rose-400/40 text-rose-200 cursor-not-allowed'
+              : clsx(
+                  `bg-gradient-to-br ${palette.bg} border ${palette.border} text-white`,
+                  seat.status === 'held' ? 'ring-2 ring-amber-300/80 shadow-lg' : '',
+                  isSelected ? 'ring-2 ring-emerald-200 shadow-xl scale-[1.02]' : '',
+                );
 
       cells.push(
         <button
@@ -76,6 +97,9 @@ export const SeatMapView = ({ seatMap, seats, selected, onToggle }: SeatMapViewP
           className={clsx(
             'h-14 rounded-xl border text-sm font-semibold flex flex-col items-center justify-center transition-all duration-150 focus:outline-none',
             statusClass,
+            limitReached && !isSelected && seat.status === 'available'
+              ? 'opacity-60 cursor-not-allowed'
+              : '',
           )}
           disabled={isDisabled}
           onClick={() => onToggle(seat)}
@@ -103,11 +127,11 @@ export const SeatMapView = ({ seatMap, seats, selected, onToggle }: SeatMapViewP
 
       <div className="grid md:grid-cols-2 gap-3 text-xs">
         <div className="flex flex-wrap gap-2">
-          <LegendChip color="bg-emerald-500/80" label="Ghế trống" />
-          <LegendChip color="bg-amber-400/80" label="Ghế bạn đang giữ" />
-          <LegendChip color="bg-rose-500/70" label="Ghế bị khóa" />
-          <LegendChip color="bg-slate-500/60" label="Không bán" />
-          <LegendChip color="bg-emerald-200/50 border border-emerald-200/70" label="Đang chọn" />
+          <LegendChip color="bg-emerald-500/80" label="A - Available" />
+          <LegendChip color="bg-emerald-200/80 border border-emerald-200/70 text-emerald-950" label="B - Selected" />
+          <LegendChip color="bg-amber-400/80 text-amber-950" label="C - Locked" />
+          <LegendChip color="bg-rose-600/80" label="D - Booked" />
+          <LegendChip color="bg-slate-500/60" label="Inactive" />
         </div>
         <div className="flex flex-wrap gap-2">
           {Object.entries(seatTypeStyles).map(([key, value]) => (

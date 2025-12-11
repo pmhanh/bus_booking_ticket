@@ -9,6 +9,7 @@ export type CreateBookingPayload = {
   seats: string[];
   passengers?: PassengerInput[];
   lockToken?: string;
+  guestSessionId?: string;
 };
 
 export async function getSeatStatus(tripId: number, lockToken?: string) {
@@ -32,9 +33,9 @@ export async function getMyBookings(token: string) {
   });
 }
 
-export async function lookupBooking(code: string, phone?: string, email?: string) {
+export async function lookupBooking(code?: string, phone?: string, email?: string) {
   const qs = new URLSearchParams();
-  qs.set('reference', code);
+  if (code) qs.set('reference', code);
   if (phone) qs.set('phone', phone);
   if (email) qs.set('email', email);
   return apiClient<Booking>(`/bookings/lookup?${qs.toString()}`, { method: 'GET' });

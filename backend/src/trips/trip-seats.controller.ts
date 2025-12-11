@@ -45,6 +45,17 @@ export class TripSeatsController {
   }
 
   @UseGuards(OptionalJwtAuthGuard)
+  @Post('locks')
+  lockSeatsAlias(
+    @Param('tripId', ParseIntPipe) tripId: number,
+    @Body() dto: LockSeatsDto,
+    @Req() req: AuthedRequest,
+  ) {
+    const user = req.user as JwtPayload | undefined;
+    return this.tripSeatsService.lockSeats(tripId, dto, user?.sub);
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
   @Patch('seat-locks/:token')
   refreshLock(
     @Param('tripId', ParseIntPipe) tripId: number,
@@ -53,7 +64,31 @@ export class TripSeatsController {
     @Req() req: AuthedRequest,
   ) {
     const user = req.user as JwtPayload | undefined;
-    return this.tripSeatsService.refreshLock(tripId, token, dto, user?.sub);
+    return this.tripSeatsService.refreshLock(
+      tripId,
+      token,
+      dto,
+      user?.sub,
+      dto.guestSessionId,
+    );
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Patch('locks/:token')
+  refreshLockAlias(
+    @Param('tripId', ParseIntPipe) tripId: number,
+    @Param('token') token: string,
+    @Body() dto: RefreshLockDto,
+    @Req() req: AuthedRequest,
+  ) {
+    const user = req.user as JwtPayload | undefined;
+    return this.tripSeatsService.refreshLock(
+      tripId,
+      token,
+      dto,
+      user?.sub,
+      dto.guestSessionId,
+    );
   }
 
   @UseGuards(OptionalJwtAuthGuard)
@@ -62,8 +97,31 @@ export class TripSeatsController {
     @Param('tripId', ParseIntPipe) tripId: number,
     @Param('token') token: string,
     @Req() req: AuthedRequest,
+    @Query('guestSessionId') guestSessionId?: string,
   ) {
     const user = req.user as JwtPayload | undefined;
-    return this.tripSeatsService.releaseLock(tripId, token, user?.sub);
+    return this.tripSeatsService.releaseLock(
+      tripId,
+      token,
+      user?.sub,
+      guestSessionId,
+    );
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Delete('locks/:token')
+  releaseLockAlias(
+    @Param('tripId', ParseIntPipe) tripId: number,
+    @Param('token') token: string,
+    @Req() req: AuthedRequest,
+    @Query('guestSessionId') guestSessionId?: string,
+  ) {
+    const user = req.user as JwtPayload | undefined;
+    return this.tripSeatsService.releaseLock(
+      tripId,
+      token,
+      user?.sub,
+      guestSessionId,
+    );
   }
 }

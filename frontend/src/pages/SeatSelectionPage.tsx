@@ -1,11 +1,9 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { io, type Socket } from "socket.io-client";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { SeatMapView } from "../components/seats/SeatMapView";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { FormField } from "../components/ui/FormField";
-import { MessagePopup } from "../components/ui/MessagePopup";
 import { fetchSeatAvailability, lockSeats, refreshSeatLock, releaseSeatLock } from "../api/seats";
 import { useAuth } from "../context/AuthContext";
 import { useBooking } from "../context/BookingContext";
@@ -19,7 +17,6 @@ const formatDate = (date: string) =>
 export const SeatSelectionPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const { accessToken, user } = useAuth();
   const {
     trip,
@@ -40,10 +37,23 @@ export const SeatSelectionPage = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
-  const [wsConnected, setWsConnected] = useState(false);
-  const socketRef = useRef<Socket | null>(null);
+  const [passengerErrors, setPassengerErrors] = useState<Record<string, { name?: string; phone?: string; idNumber?: string }>>({});
+  const [contactErrors, setContactErrors] = useState<{ name?: string; email?: string; phone?: string }>({});
+  const [expiryModalOpen, setExpiryModalOpen] = useState(false);
+  const [guestSessionId] = useState(() => {
+    const key = 'guest_session_id';
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const id = crypto.randomUUID();
+    localStorage.setItem(key, id);
+    return id;
+  });
+  const maxSelectable = 4;
+  const holdMinutes =
+    Number((import.meta.env.VITE_SEAT_HOLD_MINUTES as string | undefined) || 10) || 10;
   const syncAvailabilityRef = useRef<(data: SeatAvailability) => void>();
   const lockTokenRef = useRef<string | null>(null);
+  const skipReleaseRef = useRef(false);
 
   const syncAvailability = useCallback(
     (data: SeatAvailability) => {
@@ -70,7 +80,9 @@ export const SeatSelectionPage = () => {
         }
       } else {
         const allowed = new Set(
-          data.seats.filter((s) => s.status !== "locked" && s.status !== "inactive").map((s) => s.code),
+          data.seats
+            .filter((s) => s.status !== "locked" && s.status !== "inactive" && s.status !== "booked")
+            .map((s) => s.code),
         );
         const next = selectedSeats
           .filter((s) => allowed.has(s.code))
@@ -110,38 +122,7 @@ export const SeatSelectionPage = () => {
     lockTokenRef.current = lockInfo?.token ?? null;
   }, [lockInfo?.token]);
 
-  useEffect(() => {
-    if (!id) return;
-    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || "http://localhost:3000/api";
-    const socketUrl = apiBase.replace(/\/api$/, "");
-    const socket = io(`${socketUrl}/seat-updates`, { query: { tripId: id } });
-    socketRef.current = socket;
-
-    socket.on("connect", () => {
-      setWsConnected(true);
-      socket.emit("subscribe", { tripId: Number(id), lockToken: lockTokenRef.current || undefined });
-    });
-    socket.on("disconnect", () => {
-      setWsConnected(false);
-    });
-    socket.on("connect_error", () => {
-      setWsConnected(false);
-      setError("Không thể kết nối realtime, đang dùng cập nhật định kỳ.");
-    });
-    socket.on("seatAvailability", (payload: SeatAvailability) => {
-      syncAvailabilityRef.current?.(payload);
-    });
-
-    return () => {
-      socketRef.current = null;
-      socket.disconnect();
-    };
-  }, [id]);
-
-  useEffect(() => {
-    if (!socketRef.current || !socketRef.current.connected || !id) return;
-    socketRef.current.emit("subscribe", { tripId: Number(id), lockToken: lockInfo?.token });
-  }, [id, lockInfo?.token]);
+  // realtime updates removed
 
   useEffect(() => {
     if (!lockInfo) return;
@@ -151,11 +132,17 @@ export const SeatSelectionPage = () => {
 
   useEffect(() => {
     return () => {
+      if (skipReleaseRef.current) return;
       if (lockInfo && id) {
-        releaseSeatLock(Number(id), lockInfo.token, accessToken || undefined).catch(() => {});
+        releaseSeatLock(
+          Number(id),
+          lockInfo.token,
+          accessToken || undefined,
+          guestSessionId,
+        ).catch(() => {});
       }
     };
-  }, [lockInfo, accessToken, id]);
+  }, [lockInfo, accessToken, id, guestSessionId]);
 
   useEffect(() => {
     if (!user) return;
@@ -169,6 +156,16 @@ export const SeatSelectionPage = () => {
     return Math.max(0, Math.floor((new Date(lockInfo.expiresAt).getTime() - now) / 1000));
   }, [lockInfo, now]);
 
+  useEffect(() => {
+    if (!lockInfo) return;
+    if (remainingSeconds > 0) return;
+    setError("Phiên giữ ghế hết hạn, vui lòng quay lại chọn ghế và giữ ghế lại.");
+    setExpiryModalOpen(true);
+    setLockInfo(null);
+    setSelectedSeats([]);
+    loadAvailability(false);
+  }, [lockInfo, remainingSeconds, loadAvailability, setLockInfo, setSelectedSeats]);
+
   const applyLock = useCallback(
     async (nextSeats: { code: string; price?: number }[]) => {
       if (!id) return;
@@ -177,7 +174,12 @@ export const SeatSelectionPage = () => {
         if (lockInfo) {
           setActionLoading(true);
           try {
-            const res = await releaseSeatLock(Number(id), lockInfo.token, accessToken || undefined);
+            const res = await releaseSeatLock(
+              Number(id),
+              lockInfo.token,
+              accessToken || undefined,
+              guestSessionId,
+            );
             setAvailability(res.availability);
           } catch {
           } finally {
@@ -191,11 +193,19 @@ export const SeatSelectionPage = () => {
       setActionLoading(true);
       setError(null);
       try {
-        const res = await lockSeats(
-          Number(id),
-          { seats: nextSeats.map((s) => s.code), lockToken: lockInfo?.token },
-          accessToken || undefined,
-        );
+        const attempt = async (token?: string) =>
+          lockSeats(
+            Number(id),
+            {
+              seats: nextSeats.map((s) => s.code),
+              lockToken: token,
+              guestSessionId,
+              holdMinutes,
+            },
+            accessToken || undefined,
+          );
+
+        const res = await attempt(lockInfo?.token);
         setLockInfo({ token: res.lockToken, expiresAt: res.expiresAt });
         setAvailability(res.availability);
         const held = res.availability.seats
@@ -203,21 +213,58 @@ export const SeatSelectionPage = () => {
           .map((s) => ({ code: s.code, price: s.price }));
         setSelectedSeats(held);
       } catch (err) {
-        setError((err as Error).message || "Không thể giữ ghế.");
+        const message = (err as Error).message || "Khong the giu ghe.";
+        const lower = message.toLowerCase();
+        if (lower.includes("lock token") || lower.includes("not found")) {
+          try {
+            const res = await lockSeats(
+              Number(id),
+              { seats: nextSeats.map((s) => s.code), guestSessionId, holdMinutes },
+              accessToken || undefined,
+            );
+            setLockInfo({ token: res.lockToken, expiresAt: res.expiresAt });
+            setAvailability(res.availability);
+            const held = res.availability.seats
+              .filter((s) => s.lockToken === res.lockToken)
+              .map((s) => ({ code: s.code, price: s.price }));
+            setSelectedSeats(held);
+            return;
+          } catch (retryErr) {
+            setLockInfo(null);
+            setSelectedSeats([]);
+            loadAvailability(true);
+            setError(
+              (retryErr as Error).message ||
+                "Phiên giữ ghế hết hạn, vui lòng quay lại chọn ghế và giữ ghế lại.",
+            );
+          }
+        }
+        setError(message);
       } finally {
         setActionLoading(false);
       }
     },
-    [accessToken, id, lockInfo, setLockInfo, setSelectedSeats],
+    [accessToken, guestSessionId, id, loadAvailability, lockInfo, setLockInfo, setSelectedSeats],
   );
 
-  const toggleSeat = async (seat: SeatWithState) => {
-    if (seat.status === "locked" || seat.status === "inactive") return;
+    const toggleSeat = async (seat: SeatWithState) => {
+    if (seat.status === "locked" || seat.status === "inactive" || seat.status === "booked") return;
     const exists = selectedSeats.some((s) => s.code === seat.code);
+    if (!exists && selectedSeats.length >= maxSelectable) {
+      setError(`Chi duoc chon toi da ${maxSelectable} ghe trong moi luot dat.`);
+      return;
+    }
     const seatPrice = seat.price ?? availability?.trip.basePrice ?? 0;
     const next = exists
       ? selectedSeats.filter((s) => s.code !== seat.code)
       : [...selectedSeats, { code: seat.code, price: seatPrice }];
+    if (!exists) {
+      setPassengerErrors((prev) => {
+        const copy = { ...prev };
+        delete copy[seat.code];
+        return copy;
+      });
+    }
     await applyLock(next);
   };
 
@@ -225,7 +272,13 @@ export const SeatSelectionPage = () => {
     if (!id || !lockInfo || !accessToken) return;
     setActionLoading(true);
     try {
-      const res = await refreshSeatLock(Number(id), lockInfo.token, accessToken);
+      const res = await refreshSeatLock(
+        Number(id),
+        lockInfo.token,
+        accessToken,
+        holdMinutes,
+        guestSessionId,
+      );
       setLockInfo({ token: res.lockToken, expiresAt: res.expiresAt });
       setAvailability(res.availability);
     } catch (err) {
@@ -233,6 +286,66 @@ export const SeatSelectionPage = () => {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const validateForms = () => {
+    const phoneRegex = /^[0-9]{9,11}$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const nextPassengerErrors: Record<string, { name?: string; phone?: string; idNumber?: string }> = {};
+    let ok = true;
+    if (!selectedSeats.length) {
+      ok = false;
+      setError('Vui long chon ghe truoc khi tiep tuc.');
+    }
+    selectedSeats.forEach((seat) => {
+      const p = passengers.find((item) => item.seatCode === seat.code);
+      if (!p || !p.name.trim()) {
+        ok = false;
+        nextPassengerErrors[seat.code] = { ...(nextPassengerErrors[seat.code] || {}), name: "Vui long nhap ho ten" };
+      } else if (p.name.trim().length < 2) {
+        ok = false;
+        nextPassengerErrors[seat.code] = { ...(nextPassengerErrors[seat.code] || {}), name: "Ten it nhat 2 ky tu" };
+      }
+      if (!p || !p.phone?.trim()) {
+        ok = false;
+        nextPassengerErrors[seat.code] = { ...(nextPassengerErrors[seat.code] || {}), phone: "Nhap so dien thoai" };
+      } else if (!phoneRegex.test(p.phone.trim())) {
+        ok = false;
+        nextPassengerErrors[seat.code] = { ...(nextPassengerErrors[seat.code] || {}), phone: "So dien thoai khong hop le" };
+      }
+      if (!p || !p.idNumber?.trim()) {
+        ok = false;
+        nextPassengerErrors[seat.code] = { ...(nextPassengerErrors[seat.code] || {}), idNumber: "Nhap CCCD/Passport" };
+      } else if (p.idNumber.trim().length < 6) {
+        ok = false;
+        nextPassengerErrors[seat.code] = { ...(nextPassengerErrors[seat.code] || {}), idNumber: "ID it nhat 6 ky tu" };
+      }
+    });
+
+    const nextContactErrors: { name?: string; email?: string; phone?: string } = {};
+    if (!contact.name.trim()) {
+      ok = false;
+      nextContactErrors.name = "Nhap ten lien he";
+    }
+    if (!contact.email?.trim()) {
+      ok = false;
+      nextContactErrors.email = "Nhap email";
+    } else if (!emailRegex.test(contact.email.trim())) {
+      ok = false;
+      nextContactErrors.email = "Email khong hop le";
+    }
+    if (!contact.phone?.trim()) {
+      ok = false;
+      nextContactErrors.phone = "Nhap so dien thoai lien he";
+    } else if (!phoneRegex.test(contact.phone.trim())) {
+      ok = false;
+      nextContactErrors.phone = "So dien thoai khong hop le";
+    }
+
+    setPassengerErrors(nextPassengerErrors);
+    setContactErrors(nextContactErrors);
+    if (!ok) setError("Vui long dien du thong tin bat buoc.");
+    return ok;
   };
 
   const contactRequired = true;
@@ -248,16 +361,12 @@ export const SeatSelectionPage = () => {
             {"<- Quay lại"}
           </button>
           <h1 className="text-3xl font-bold text-white">Chọn ghế & đặt vé</h1>
-          <p className="text-sm text-gray-300">
-            Chọn ghế, giữ ghế và điền thông tin hành khách. Khách vãng lai cần bổ sung thông tin liên hệ trước khi xác nhận.
-          </p>
+
         </div>
         <Button variant="secondary" onClick={() => navigate(`/trips/${id}`)}>
           Xem chi tiết chuyến
         </Button>
       </div>
-
-      <MessagePopup open={!!error} message={error || ""} type="error" onClose={() => setError(null)} />
 
       {error ? <Card className="text-red-200 text-sm">{error}</Card> : null}
 
@@ -293,6 +402,8 @@ export const SeatSelectionPage = () => {
                   seats={availability.seats}
                   selected={selectedSeats.map((s) => s.code)}
                   onToggle={toggleSeat}
+                  maxSelectable={maxSelectable}
+                  activeLockToken={lockInfo?.token || undefined}
                 />
               </div>
 
@@ -325,6 +436,7 @@ export const SeatSelectionPage = () => {
                           seatCode: seat.code,
                           name: "",
                         };
+                        const errs = passengerErrors[seat.code] || {};
                         return (
                           <div
                             key={seat.code}
@@ -333,31 +445,44 @@ export const SeatSelectionPage = () => {
                             <div className="md:col-span-3 text-sm text-white font-semibold flex items-center gap-2">
                               <span>Ghế {seat.code}</span>
                               <span className="text-xs text-gray-400">
-                                Giá {availability.seats.find((s) => s.code === seat.code)?.price.toLocaleString() || ""} VND
+                                 {availability.seats.find((s) => s.code === seat.code)?.price.toLocaleString() || ""} VND
                               </span>
                             </div>
                             <FormField
                               label="Họ tên"
                               value={passenger.name}
-                              onChange={(e) => updatePassenger(seat.code, { name: e.target.value })}
+                              onChange={(e) => {
+                                updatePassenger(seat.code, { name: e.target.value });
+                                if (errs.name) setPassengerErrors((prev) => ({ ...prev, [seat.code]: { ...(prev[seat.code] || {}), name: undefined } }));
+                              }}
                               className="md:col-span-2"
                               required
+                              error={errs.name}
                             />
                             <FormField
                               label="Số điện thoại"
                               value={passenger.phone || ""}
-                              onChange={(e) => updatePassenger(seat.code, { phone: e.target.value })}
+                              onChange={(e) => {
+                                updatePassenger(seat.code, { phone: e.target.value });
+                                if (errs.phone) setPassengerErrors((prev) => ({ ...prev, [seat.code]: { ...(prev[seat.code] || {}), phone: undefined } }));
+                              }}
                               required
+                              error={errs.phone}
                             />
                             <FormField
                               label="CCCD/Passport"
                               value={passenger.idNumber || ""}
-                              onChange={(e) => updatePassenger(seat.code, { idNumber: e.target.value })}
+                              onChange={(e) => {
+                                updatePassenger(seat.code, { idNumber: e.target.value });
+                                if (errs.idNumber) setPassengerErrors((prev) => ({ ...prev, [seat.code]: { ...(prev[seat.code] || {}), idNumber: undefined } }));
+                              }}
                               required
+                              error={errs.idNumber}
                             />
                           </div>
                         );
                       })}
+
                     </div>
                   </div>
                 ) : null}
@@ -408,42 +533,53 @@ export const SeatSelectionPage = () => {
                         <FormField
                           label="Người liên hệ"
                           value={contact.name}
-                          onChange={(e) => setContact({ name: e.target.value })}
+                          onChange={(e) => {
+                            setContact({ name: e.target.value });
+                            if (contactErrors.name) setContactErrors((prev) => ({ ...prev, name: undefined }));
+                          }}
                           required
+                          error={contactErrors.name}
                         />
                         <FormField
                           label="Email"
                           type="email"
                           value={contact.email || ""}
-                          onChange={(e) => setContact({ email: e.target.value })}
+                          onChange={(e) => {
+                            setContact({ email: e.target.value });
+                            if (contactErrors.email) setContactErrors((prev) => ({ ...prev, email: undefined }));
+                          }}
                           required
+                          error={contactErrors.email}
                         />
                         <FormField
                           label="So dien thoai"
                           value={contact.phone || ""}
-                          onChange={(e) => setContact({ phone: e.target.value })}
+                          onChange={(e) => {
+                            setContact({ phone: e.target.value });
+                            if (contactErrors.phone) setContactErrors((prev) => ({ ...prev, phone: undefined }));
+                          }}
                           required
+                          error={contactErrors.phone}
                         />
                       </div>
-                      <div className="text-xs text-gray-400">
-                        {user
-                          ? "Đã điền sẵn từ tài khoản, bạn có thể chỉnh sửa trước khi xác nhận."
-                          : "Cần điền tên và email (bắt buộc) và số điện thoại nếu có để nhận vé."}
-                      </div>
+                      
                     </div>
 
                     <Button
-                      onClick={() => navigate("/bookings/review", { state: { fromTrip: id } })}
-                      disabled={!readyToReview}
+                      onClick={() => {
+                        skipReleaseRef.current = true;
+                        if (validateForms()) {
+                          navigate("/bookings/review", { state: { fromTrip: id } });
+                        } else {
+                          skipReleaseRef.current = false;
+                        }
+                      }}
+                      disabled={actionLoading}
                       className="w-full"
                     >
                       Tiếp tục xác nhận
                     </Button>
-                    {!readyToReview ? (
-                      <div className="text-xs text-gray-400 text-center">
-                        Chọn ghế, điền tên hành khách và thông tin liên hệ (nếu cần) để tiếp tục.
-                      </div>
-                    ) : null}
+                    
                   </div>
                 </div>
               </div>
@@ -451,6 +587,34 @@ export const SeatSelectionPage = () => {
           </Card>
         </>
       )}
+
+      {expiryModalOpen ? (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-gray-900 border border-white/10 shadow-2xl p-5 space-y-4">
+            <div className="text-lg font-semibold text-white">Phiên giữ ghế hết hạn</div>
+            <div className="text-sm text-gray-200">
+              Phiên giữ ghế hết hạn, vui lòng quay lại chọn ghế và giữ ghế lại.
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setExpiryModalOpen(false)}
+                className="border border-white/10 bg-white/10"
+              >
+                Đóng
+              </Button>
+              <Button
+                onClick={() => {
+                  setExpiryModalOpen(false);
+                  loadAvailability(true);
+                }}
+              >
+                Chọn ghế lại
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

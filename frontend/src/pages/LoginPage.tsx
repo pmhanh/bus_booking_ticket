@@ -11,6 +11,7 @@ export const LoginPage = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '', remember: true });
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
 
   const friendlyLabel = (raw: string) => {
     const normalized = raw.toLowerCase();
@@ -35,6 +36,11 @@ export const LoginPage = () => {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    const nextErrors: { email?: string; password?: string } = {};
+    if (!form.email.trim()) nextErrors.email = 'Vui long nhap email';
+    if (!form.password.trim()) nextErrors.password = 'Vui long nhap mat khau';
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
     try {
       const loggedInUser = await login(form.email, form.password, form.remember);
       navigate(loggedInUser.role === 'admin' ? '/dashboard' : '/profile');
@@ -66,14 +72,22 @@ export const LoginPage = () => {
             type="email"
             required
             value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, email: e.target.value });
+              if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }));
+            }}
+            error={fieldErrors.email}
           />
           <FormField
             label="Password"
             type="password"
             required
             value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, password: e.target.value });
+              if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }));
+            }}
+            error={fieldErrors.password}
           />
           <label className="flex items-center gap-2 text-sm text-gray-300">
             <input

@@ -1,27 +1,25 @@
 import {
   BadRequestException,
   ForbiddenException,
-  Inject,
   Injectable,
   NotFoundException,
-  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
-import { In, LessThan, MoreThan, Repository } from 'typeorm';
+import { DataSource, In, LessThan, MoreThan, Repository } from 'typeorm';
 import { Trip } from './trip.entity';
 import { SeatMap } from '../seat-maps/seat-map.entity';
 import { SeatLock } from './seat-lock.entity';
 import { LockSeatsDto } from './dto/lock-seats.dto';
 import { RefreshLockDto } from './dto/refresh-lock.dto';
 import { Booking } from '../bookings/booking.entity';
-import { TripSeatsGateway } from './trip-seats.gateway';
 
-type SeatStatus = 'available' | 'locked' | 'held' | 'inactive';
+type SeatStatus = 'available' | 'locked' | 'held' | 'inactive' | 'booked';
 
 @Injectable()
 export class TripSeatsService {
   constructor(
+    private readonly dataSource: DataSource,
     @InjectRepository(Trip) private readonly tripRepo: Repository<Trip>,
     @InjectRepository(SeatMap)
     private readonly seatMapRepo: Repository<SeatMap>,
@@ -29,9 +27,15 @@ export class TripSeatsService {
     private readonly seatLockRepo: Repository<SeatLock>,
     @InjectRepository(Booking)
     private readonly bookingRepo: Repository<Booking>,
-    @Inject(forwardRef(() => TripSeatsGateway))
-    private readonly tripSeatsGateway?: TripSeatsGateway,
   ) {}
+
+  private ownsLock(lock: SeatLock, userId?: string, guestSessionId?: string) {
+    if (lock.userId && userId) return lock.userId === userId;
+    if (lock.guestSessionId && guestSessionId)
+      return lock.guestSessionId === guestSessionId;
+    if (!lock.userId && !lock.guestSessionId) return !userId && !guestSessionId;
+    return false;
+  }
 
   private async getTripContext(tripId: number) {
     const trip = await this.tripRepo.findOne({
@@ -50,11 +54,16 @@ export class TripSeatsService {
     return { trip, seatMap };
   }
 
-  private async pruneExpiredLocks(tripId: number) {
-    await this.seatLockRepo.delete({
-      trip: { id: tripId },
-      expiresAt: LessThan(new Date()),
+  private async expireOldLocks(tripId: number) {
+    const now = new Date();
+    const expired = await this.seatLockRepo.find({
+      where: { trip: { id: tripId }, status: 'ACTIVE', expiresAt: LessThan(now) },
     });
+    if (!expired.length) return;
+    await this.seatLockRepo.update(
+      { id: In(expired.map((l) => l.id)) },
+      { status: 'EXPIRED' },
+    );
   }
 
   private async expireOldBookings(tripId: number) {
@@ -85,7 +94,7 @@ export class TripSeatsService {
       if (!seat.isActive) {
         status = 'inactive';
       } else if (bookedSeats.has(seat.code)) {
-        status = 'locked';
+        status = 'booked';
       } else if (lock) {
         status = lock.lockToken === lockToken ? 'held' : 'locked';
       }
@@ -100,10 +109,14 @@ export class TripSeatsService {
 
   async getSeatMap(tripId: number, lockToken?: string) {
     const { trip, seatMap } = await this.getTripContext(tripId);
-    await this.pruneExpiredLocks(tripId);
+    await this.expireOldLocks(tripId);
     await this.expireOldBookings(tripId);
     const locks = await this.seatLockRepo.find({
-      where: { trip: { id: tripId }, expiresAt: MoreThan(new Date()) },
+      where: {
+        trip: { id: tripId },
+        status: 'ACTIVE',
+        expiresAt: MoreThan(new Date()),
+      },
     });
     const activeBookings = await this.bookingRepo.find({
       where: [
@@ -143,9 +156,6 @@ export class TripSeatsService {
 
   async lockSeats(tripId: number, dto: LockSeatsDto, userId?: string) {
     const { trip, seatMap } = await this.getTripContext(tripId);
-    await this.pruneExpiredLocks(tripId);
-    await this.expireOldBookings(tripId);
-    const expiresAt = this.resolveExpiry(dto.holdMinutes);
     const requested = Array.from(new Set(dto.seats.map((s) => s.trim())));
     if (!requested.length)
       throw new BadRequestException('At least one seat is required');
@@ -159,70 +169,107 @@ export class TripSeatsService {
         `Invalid or inactive seats: ${invalid.join(', ')}`,
       );
 
-    let lockToken = dto.lockToken ?? randomUUID();
-    if (dto.lockToken) {
-    const existing = await this.seatLockRepo.find({
-      where: { trip: { id: tripId }, lockToken: dto.lockToken },
-    });
-    if (!existing.length)
-      throw new NotFoundException('Lock token not found or expired');
-    if (existing[0].userId && userId && existing[0].userId !== userId)
-      throw new ForbiddenException('Lock token belongs to another user');
-      await this.seatLockRepo.delete({
-        trip: { id: tripId },
-        lockToken: dto.lockToken,
-      });
-      lockToken = dto.lockToken;
-    }
+    const guestSessionId = dto.guestSessionId;
+    const expiresAt = this.resolveExpiry(dto.holdMinutes);
 
-    const activeBookings = await this.bookingRepo.find({
-      where: [
-        { trip: { id: tripId }, status: 'CONFIRMED' },
+    const result = await this.dataSource.transaction(async (manager) => {
+      const lockRepo = manager.getRepository(SeatLock);
+      const bookingRepo = manager.getRepository(Booking);
+      await lockRepo.update(
+        {
+          trip: { id: tripId },
+          status: 'ACTIVE',
+          expiresAt: LessThan(new Date()),
+        },
+        { status: 'EXPIRED' },
+      );
+      await bookingRepo.update(
         {
           trip: { id: tripId },
           status: 'PENDING',
-          expiresAt: MoreThan(new Date()),
+          expiresAt: LessThan(new Date()),
         },
-      ],
-    });
-    const bookedSeats = new Set(
-      activeBookings.flatMap((b) => b.seats.map((s) => s.trim())),
-    );
-    const bookedConflicts = requested.filter((s) => bookedSeats.has(s));
-    if (bookedConflicts.length)
-      throw new BadRequestException(
-        `Seats already booked: ${bookedConflicts.join(', ')}`,
+        { status: 'EXPIRED' },
       );
 
-    const activeConflicts = await this.seatLockRepo.find({
-      where: {
-        trip: { id: tripId },
-        seatCode: In(requested),
-        expiresAt: MoreThan(new Date()),
-      },
+      let lockToken = dto.lockToken ?? randomUUID();
+      if (dto.lockToken) {
+        const existing = await lockRepo.find({
+          where: {
+            trip: { id: tripId },
+            lockToken: dto.lockToken,
+            status: 'ACTIVE',
+            expiresAt: MoreThan(new Date()),
+          },
+        });
+        if (!existing.length)
+          throw new NotFoundException('Lock token not found or expired');
+        const owner = existing[0];
+        if (
+          (owner.userId && userId && owner.userId !== userId) ||
+          (owner.guestSessionId &&
+            guestSessionId &&
+            owner.guestSessionId !== guestSessionId)
+        ) {
+          throw new ForbiddenException('Lock token belongs to another user');
+        }
+        await lockRepo.update(
+          { trip: { id: tripId }, lockToken: dto.lockToken },
+          { status: 'RELEASED' },
+        );
+        lockToken = dto.lockToken;
+      }
+
+      const activeBookings = await bookingRepo.find({
+        where: [
+          { trip: { id: tripId }, status: 'CONFIRMED' },
+          {
+            trip: { id: tripId },
+            status: 'PENDING',
+            expiresAt: MoreThan(new Date()),
+          },
+        ],
+      });
+      const bookedSeats = new Set(
+        activeBookings.flatMap((b) => b.seats.map((s) => s.trim())),
+      );
+      const bookedConflicts = requested.filter((s) => bookedSeats.has(s));
+      if (bookedConflicts.length)
+        throw new BadRequestException(
+          `Seats already booked: ${bookedConflicts.join(', ')}`,
+        );
+
+      const activeConflicts = await lockRepo.find({
+        where: {
+          trip: { id: tripId },
+          seatCode: In(requested),
+          status: 'ACTIVE',
+          expiresAt: MoreThan(new Date()),
+        },
+      });
+      const blockingLocks = activeConflicts.filter(
+        (lock) => !this.ownsLock(lock, userId, guestSessionId),
+      );
+      if (blockingLocks.length)
+        throw new BadRequestException('Some seats are already locked');
+
+      const locks = requested.map((code) =>
+        lockRepo.create({
+          trip,
+          seatCode: code,
+          userId,
+          guestSessionId,
+          lockToken,
+          expiresAt,
+          status: 'ACTIVE',
+        }),
+      );
+      await lockRepo.save(locks);
+      return { lockToken, expiresAt, seats: requested };
     });
-    if (activeConflicts.length)
-      throw new BadRequestException('Some seats are already locked');
 
-    const locks = requested.map((code) =>
-      this.seatLockRepo.create({
-        trip,
-        seatCode: code,
-        userId,
-        lockToken,
-        expiresAt,
-      }),
-    );
-    await this.seatLockRepo.save(locks);
-
-    const availability = await this.getSeatMap(tripId, lockToken);
-    const response = {
-      lockToken,
-      expiresAt,
-      seats: requested,
-      availability,
-    };
-    this.tripSeatsGateway?.broadcastAvailability(tripId, availability);
+    const availability = await this.getSeatMap(tripId, result.lockToken);
+    const response = { ...result, availability };
     return response;
   }
 
@@ -231,14 +278,20 @@ export class TripSeatsService {
     token: string,
     dto: RefreshLockDto,
     userId?: string,
+    guestSessionId?: string,
   ) {
-    await this.pruneExpiredLocks(tripId);
+    await this.expireOldLocks(tripId);
     const locks = await this.seatLockRepo.find({
-      where: { trip: { id: tripId }, lockToken: token },
+      where: {
+        trip: { id: tripId },
+        lockToken: token,
+        status: 'ACTIVE',
+        expiresAt: MoreThan(new Date()),
+      },
     });
     if (!locks.length)
       throw new NotFoundException('Lock not found or already expired');
-    if (locks[0].userId && userId && locks[0].userId !== userId)
+    if (!this.ownsLock(locks[0], userId, guestSessionId))
       throw new ForbiddenException('Lock token belongs to another user');
     const expiresAt = this.resolveExpiry(dto.holdMinutes);
     locks.forEach((l) => (l.expiresAt = expiresAt));
@@ -250,20 +303,31 @@ export class TripSeatsService {
       seats: locks.map((l) => l.seatCode),
       availability,
     };
-    this.tripSeatsGateway?.broadcastAvailability(tripId, availability);
     return response;
   }
 
-  async releaseLock(tripId: number, token: string, userId?: string) {
+  async releaseLock(
+    tripId: number,
+    token: string,
+    userId?: string,
+    guestSessionId?: string,
+  ) {
     const locks = await this.seatLockRepo.find({
-      where: { trip: { id: tripId }, lockToken: token },
+      where: {
+        trip: { id: tripId },
+        lockToken: token,
+        status: 'ACTIVE',
+        expiresAt: MoreThan(new Date()),
+      },
     });
     if (!locks.length) return { released: false };
-    if (locks[0].userId && userId && locks[0].userId !== userId)
+    if (!this.ownsLock(locks[0], userId, guestSessionId))
       throw new ForbiddenException('Lock token belongs to another user');
-    await this.seatLockRepo.delete({ trip: { id: tripId }, lockToken: token });
+    await this.seatLockRepo.update(
+      { trip: { id: tripId }, lockToken: token },
+      { status: 'RELEASED' },
+    );
     const availability = await this.getSeatMap(tripId);
-    this.tripSeatsGateway?.broadcastAvailability(tripId, availability);
     return { released: true, availability };
   }
 }

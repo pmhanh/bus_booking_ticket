@@ -20,6 +20,7 @@ export const BookingsPage = () => {
   const [lookupEmail, setLookupEmail] = useState('');
   const [lookupResult, setLookupResult] = useState<Booking | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [lookupFieldError, setLookupFieldError] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [editing, setEditing] = useState<Booking | null>(null);
   const [editContact, setEditContact] = useState({ name: '', phone: '', email: '' });
@@ -48,9 +49,15 @@ export const BookingsPage = () => {
   };
 
   const handleLookup = async () => {
+    if (!lookupCode && !lookupPhone && !lookupEmail) {
+      setLookupError('Nhập mã đặt chỗ, email hoặc số điện thoại để tra cứu.');
+      setLookupFieldError(true);
+      return;
+    }
     setLookupLoading(true);
     setLookupError(null);
     setLookupResult(null);
+    setLookupFieldError(false);
     try {
       const booking = await lookupBooking(lookupCode, lookupPhone, lookupEmail);
       setLookupResult(booking);
@@ -151,24 +158,43 @@ export const BookingsPage = () => {
 
 
       {!user ? (
-        <Card title="Tra cứu đặt chỗ (không cần đăng nhập)">
+        <Card title="Tra cứu đặt chỗ">
           <div className="grid md:grid-cols-3 gap-3">
-            <FormField label="Mã đặt chỗ" value={lookupCode} onChange={(e) => setLookupCode(e.target.value)} />
+            <FormField
+              label="Mã đặt chỗ"
+              value={lookupCode}
+              onChange={(e) => {
+                setLookupCode(e.target.value);
+                if (lookupFieldError) setLookupFieldError(false);
+                if (lookupError) setLookupError(null);
+              }}
+              error={lookupFieldError ? 'Nhập mã đặt chỗ, email hoặc số điện thoại.' : undefined}
+            />
             <FormField
               label="Số điện thoại"
               value={lookupPhone}
               placeholder="Đăng nhập để xác thực"
-              onChange={(e) => setLookupPhone(e.target.value)}
+              onChange={(e) => {
+                setLookupPhone(e.target.value);
+                if (lookupFieldError) setLookupFieldError(false);
+                if (lookupError) setLookupError(null);
+              }}
+              error={lookupFieldError ? 'Nhập mã đặt chỗ, email hoặc số điện thoại.' : undefined}
             />
             <FormField
               label="Email"
               value={lookupEmail}
               placeholder="Tùy chọn"
-              onChange={(e) => setLookupEmail(e.target.value)}
+              onChange={(e) => {
+                setLookupEmail(e.target.value);
+                if (lookupFieldError) setLookupFieldError(false);
+                if (lookupError) setLookupError(null);
+              }}
+              error={lookupFieldError ? 'Nhập mã đặt chỗ, email hoặc số điện thoại.' : undefined}
             />
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={handleLookup} disabled={lookupLoading || !lookupCode || (!lookupPhone && !lookupEmail)}>
+            <Button onClick={handleLookup} disabled={lookupLoading}>
               {lookupLoading ? 'Đang tải...' : 'Tra cứu đặt chỗ'}
             </Button>
             {lookupError ? <span className="text-sm text-red-200">{lookupError}</span> : null}
@@ -278,4 +304,3 @@ const BookingRow = ({
     </div>
   </div>
 );
-

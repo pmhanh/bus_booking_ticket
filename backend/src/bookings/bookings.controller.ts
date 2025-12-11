@@ -19,6 +19,7 @@ import { JwtPayload } from '../auth/interfaces/jwt-payload';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
+import { GuestLookupDto } from './dto/guest-lookup.dto';
 
 type AuthedRequest = Request & { user?: JwtPayload };
 
@@ -53,6 +54,11 @@ export class BookingsController {
   @Get('lookup')
   lookup(@Query() dto: LookupBookingDto) {
     return this.bookingsService.lookup(dto);
+  }
+
+  @Get('/guest-bookings')
+  guestLookup(@Query() dto: GuestLookupDto) {
+    return this.bookingsService.lookupGuest(dto);
   }
 
   @Get(':reference')

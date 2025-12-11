@@ -12,10 +12,11 @@ export const RegisterPage = () => {
   const [form, setForm] = useState({ fullName: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ fullName?: string; email?: string; password?: string }>({});
   const passwordRule = /^(?=.*[a-z])(?=.*[A-Z]).{8,}$/;
 
   const parseErrorMessage = (err: unknown) => {
-    const fallback = (err as Error)?.message || 'Đã có lỗi xảy ra';
+    const fallback = (err as Error)?.message || 'Da co loi xay ra';
     try {
       const parsed = JSON.parse(fallback) as { message?: string | string[] };
       if (Array.isArray(parsed.message)) return parsed.message.join(', ');
@@ -30,8 +31,14 @@ export const RegisterPage = () => {
     e.preventDefault();
     setError('');
     setInfo('');
+    const nextErrors: { fullName?: string; email?: string; password?: string } = {};
+    if (!form.fullName.trim()) nextErrors.fullName = 'Vui long nhap ho ten';
+    if (!form.email.trim()) nextErrors.email = 'Vui long nhap email';
+    if (!form.password.trim()) nextErrors.password = 'Vui long nhap mat khau';
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
     if (!passwordRule.test(form.password)) {
-      setError('Mật khẩu cần tối thiểu 8 ký tự, có ít nhất 1 chữ thường và 1 chữ in hoa.');
+      setError('Mat khau can toi thieu 8 ky tu, co chu thuong va chu hoa.');
       return;
     }
     try {
@@ -52,14 +59,23 @@ export const RegisterPage = () => {
           <FormField
             label="Full name"
             value={form.fullName}
-            onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+            required
+            onChange={(e) => {
+              setForm({ ...form, fullName: e.target.value });
+              if (fieldErrors.fullName) setFieldErrors((prev) => ({ ...prev, fullName: undefined }));
+            }}
+            error={fieldErrors.fullName}
           />
           <FormField
             label="Email"
             type="email"
             required
             value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, email: e.target.value });
+              if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }));
+            }}
+            error={fieldErrors.email}
           />
           <FormField
             label="Password"
@@ -68,7 +84,11 @@ export const RegisterPage = () => {
             minLength={8}
             placeholder="At least 8 characters"
             value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, password: e.target.value });
+              if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }));
+            }}
+            error={fieldErrors.password}
           />
           {error ? <div className="text-error text-sm">{error}</div> : null}
           {info ? <div className="text-success text-sm">{info}</div> : null}

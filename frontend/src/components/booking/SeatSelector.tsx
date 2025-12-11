@@ -30,8 +30,6 @@ export const SeatSelector = ({ tripId, selected, onToggle, lockToken }: Props) =
 
   useEffect(() => {
     load();
-    const timer = window.setInterval(load, 6000);
-    return () => window.clearInterval(timer);
   }, [load]);
 
   // Deduplicate by seat code to avoid duplicate keys and double-add selections

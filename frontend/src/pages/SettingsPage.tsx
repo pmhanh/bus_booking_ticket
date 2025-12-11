@@ -11,12 +11,21 @@ export const SettingsPage = () => {
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ current?: string; next?: string; confirm?: string }>({});
 
   const changePassword = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setMessage('');
+    const nextErrors: { current?: string; next?: string; confirm?: string } = {};
+    if (!pw.current.trim()) nextErrors.current = 'Nhap mat khau hien tai';
+    if (!pw.next.trim()) nextErrors.next = 'Nhap mat khau moi';
+    if (!pw.confirm.trim()) nextErrors.confirm = 'Nhap lai mat khau moi';
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
     if (pw.next !== pw.confirm) {
       setError('New passwords do not match');
+      setFieldErrors((prev) => ({ ...prev, confirm: 'Mat khau khong khop' }));
       return;
     }
     if (!accessToken) return;
@@ -37,24 +46,36 @@ export const SettingsPage = () => {
             label="Current password"
             type="password"
             value={pw.current}
-            onChange={(e) => setPw({ ...pw, current: e.target.value })}
+            onChange={(e) => {
+              setPw({ ...pw, current: e.target.value });
+              if (fieldErrors.current) setFieldErrors((prev) => ({ ...prev, current: undefined }));
+            }}
             required
+            error={fieldErrors.current}
           />
           <FormField
             label="New password"
             type="password"
             value={pw.next}
             minLength={8}
-            onChange={(e) => setPw({ ...pw, next: e.target.value })}
+            onChange={(e) => {
+              setPw({ ...pw, next: e.target.value });
+              if (fieldErrors.next) setFieldErrors((prev) => ({ ...prev, next: undefined }));
+            }}
             required
+            error={fieldErrors.next}
           />
           <FormField
             label="Confirm new password"
             type="password"
             value={pw.confirm}
             minLength={8}
-            onChange={(e) => setPw({ ...pw, confirm: e.target.value })}
+            onChange={(e) => {
+              setPw({ ...pw, confirm: e.target.value });
+              if (fieldErrors.confirm) setFieldErrors((prev) => ({ ...prev, confirm: undefined }));
+            }}
             required
+            error={fieldErrors.confirm}
           />
           {error ? <div className="text-error text-sm">{error}</div> : null}
           {message ? <div className="text-success text-sm">{message}</div> : null}

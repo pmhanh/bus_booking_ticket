@@ -15,7 +15,7 @@ export function fetchSeatAvailability(tripId: number, lockToken?: string) {
 
 export function lockSeats(
   tripId: number,
-  params: { seats: string[]; holdMinutes?: number; lockToken?: string },
+  params: { seats: string[]; holdMinutes?: number; lockToken?: string; guestSessionId?: string },
   accessToken?: string,
 ) {
   return apiClient<SeatLockResponse>(`/trips/${tripId}/seat-locks`, {
@@ -30,17 +30,24 @@ export function refreshSeatLock(
   lockToken: string,
   accessToken?: string,
   holdMinutes?: number,
+  guestSessionId?: string,
 ) {
   return apiClient<SeatLockResponse>(`/trips/${tripId}/seat-locks/${lockToken}`, {
     method: 'PATCH',
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-    body: JSON.stringify({ holdMinutes }),
+    body: JSON.stringify({ holdMinutes, guestSessionId }),
   });
 }
 
-export function releaseSeatLock(tripId: number, lockToken: string, accessToken?: string) {
+export function releaseSeatLock(
+  tripId: number,
+  lockToken: string,
+  accessToken?: string,
+  guestSessionId?: string,
+) {
+  const qs = guestSessionId ? `?guestSessionId=${encodeURIComponent(guestSessionId)}` : '';
   return apiClient<{ released: boolean; availability: SeatAvailability }>(
-    `/trips/${tripId}/seat-locks/${lockToken}`,
+    `/trips/${tripId}/seat-locks/${lockToken}${qs}`,
     {
       method: 'DELETE',
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,

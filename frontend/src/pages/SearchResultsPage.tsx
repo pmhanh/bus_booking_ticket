@@ -49,8 +49,6 @@ const formatDuration = (minutes?: number) => {
   return `${hrs}h ${mins}m`;
 };
 
-const currency = (value: number) => `${value.toLocaleString()} đ`;
-
 const busTypeLabel = (type?: string) => {
   const found = BUS_TYPES.find((b) => b.value.toLowerCase() === (type || '').toLowerCase());
   return found?.label || 'Tiêu chuẩn';

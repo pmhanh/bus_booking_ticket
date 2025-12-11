@@ -50,7 +50,6 @@ export const BookingTicketPage = () => {
   const { trip } = booking;
   const departure = new Date(trip.departureTime).toLocaleString();
   const arrival = new Date(trip.arrivalTime).toLocaleString();
-  const printMode = false;
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">

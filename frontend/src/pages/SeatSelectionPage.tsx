@@ -19,7 +19,6 @@ export const SeatSelectionPage = () => {
   const navigate = useNavigate();
   const { accessToken, user } = useAuth();
   const {
-    trip,
     setTrip,
     selectedSeats,
     setSelectedSeats,
@@ -51,7 +50,7 @@ export const SeatSelectionPage = () => {
   const maxSelectable = 4;
   const holdMinutes =
     Number((import.meta.env.VITE_SEAT_HOLD_MINUTES as string | undefined) || 10) || 10;
-  const syncAvailabilityRef = useRef<(data: SeatAvailability) => void>();
+  const syncAvailabilityRef = useRef<((data: SeatAvailability) => void) | null>(null);
   const lockTokenRef = useRef<string | null>(null);
   const skipReleaseRef = useRef(false);
 
@@ -347,11 +346,6 @@ export const SeatSelectionPage = () => {
     if (!ok) setError("Vui long dien du thong tin bat buoc.");
     return ok;
   };
-
-  const contactRequired = true;
-  const contactOk = contact.name.trim() && contact.email?.trim();
-  const readyToReview =
-    selectedSeats.length > 0 && passengers.every((p) => p.name.trim()) && (contactRequired ? contactOk : !!contact.email);
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">

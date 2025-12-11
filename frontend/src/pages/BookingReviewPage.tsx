@@ -10,7 +10,7 @@ import { refreshSeatLock } from '../api/seats';
 export const BookingReviewPage = () => {
   const navigate = useNavigate();
   const { trip, passengers, contact, totalPrice, clear, lockInfo } = useBooking();
-  const { accessToken, user } = useAuth();
+  const { accessToken } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [guestSessionId] = useState(() => {

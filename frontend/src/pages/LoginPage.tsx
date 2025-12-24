@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 export const LoginPage = () => {
   const { login, googleLogin, user } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: '', password: '', remember: true });
+  const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
 
@@ -37,15 +37,15 @@ export const LoginPage = () => {
     e.preventDefault();
     setError('');
     const nextErrors: { email?: string; password?: string } = {};
-    if (!form.email.trim()) nextErrors.email = 'Vui long nhap email';
-    if (!form.password.trim()) nextErrors.password = 'Vui long nhap mat khau';
+    if (!form.email.trim()) nextErrors.email = 'Vui lòng nhập email';
+    if (!form.password.trim()) nextErrors.password = 'Vui lòng nhập mật khẩu';
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     try {
-      const loggedInUser = await login(form.email, form.password, form.remember);
+      const loggedInUser = await login(form.email, form.password);
       navigate(loggedInUser.role === 'admin' ? '/dashboard' : '/profile');
     } catch (err) {
-      const message = parseErrorMessage(err) || 'Login failed';
+      const message = parseErrorMessage(err) || 'Đăng nhập thất bại';
       setError(message);
     }
   };
@@ -56,7 +56,7 @@ export const LoginPage = () => {
       const socialUser = await googleLogin();
       navigate(socialUser.role === 'admin' ? '/dashboard' : '/profile');
     } catch (err) {
-      const message = parseErrorMessage(err) || 'Google sign-in failed';
+      const message = parseErrorMessage(err) || 'Đăng nhập Google thất bại';
       setError(message);
     }
   };
@@ -65,7 +65,7 @@ export const LoginPage = () => {
 
   return (
     <div className="max-w-lg mx-auto min-h-[70vh] flex items-center w-full">
-      <Card title="Welcome back" className="w-full">
+      <Card title="Chào mừng bạn quay lại" className="w-full">
         <form onSubmit={onSubmit} className="space-y-4">
           <FormField
             label="Email"
@@ -79,7 +79,7 @@ export const LoginPage = () => {
             error={fieldErrors.email}
           />
           <FormField
-            label="Password"
+            label="Mật khẩu"
             type="password"
             required
             value={form.password}
@@ -89,30 +89,22 @@ export const LoginPage = () => {
             }}
             error={fieldErrors.password}
           />
-          <label className="flex items-center gap-2 text-sm text-gray-300">
-            <input
-              type="checkbox"
-              checked={form.remember}
-              onChange={(e) => setForm({ ...form, remember: e.target.checked })}
-            />
-            Remember me
-          </label>
           {error ? <div className="text-error text-sm">{error}</div> : null}
           <div className="flex gap-3">
             <Button type="submit" className="flex-1">
-              Sign in
+              Đăng nhập
             </Button>
             <Button type="button" variant="secondary" className="flex-1" onClick={handleGoogle}>
-              Sign in with Google
+              Đăng nhập bằng Google
             </Button>
           </div>
         </form>
         <div className="mt-4 flex justify-between text-sm text-gray-300">
           <Link to="/register" className="text-secondary hover:underline">
-            Create account
+            Tạo tài khoản
           </Link>
           <Link to="/forgot" className="text-secondary hover:underline">
-            Forgot password?
+            Quên mật khẩu?
           </Link>
         </div>
         <div className="mt-2 text-xs text-gray-400"></div>

@@ -1,98 +1,126 @@
 import type { PropsWithChildren } from 'react';
-import { createContext, useContext, useEffect, useState } from 'react';
-import { apiClient } from '../lib/api';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import {
+  api,
+  type AuthAxiosRequestConfig,
+  type AuthStatus,
+  getAccessToken,
+  onAccessTokenChange,
+  setAccessToken,
+} from '../lib/api';
+import { setupInterceptors } from '../lib/setupInterceptors';
 import type { User } from '../types/user';
 
 type AuthContextValue = {
+  status: AuthStatus;
   user: User | null;
   accessToken: string | null;
   loading: boolean;
-  login: (email: string, password: string, remember?: boolean) => Promise<User>;
+  login: (email: string, password: string) => Promise<User>;
   register: (payload: { email: string; password: string; fullName?: string }) => Promise<string | undefined>;
   logout: () => void;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<string | null>;
   googleLogin: () => Promise<User>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const TOKEN_STORAGE_KEY = 'bus_tokens';
-
-type TokenBundle = { accessToken: string; refreshToken: string; userId: string };
+const NO_AUTH_CONFIG: AuthAxiosRequestConfig = { skipAuth: true };
 
 export const AuthProvider = ({ children }: PropsWithChildren) => {
   const [user, setUser] = useState<User | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [accessTokenState, setAccessTokenState] = useState<string | null>(null);
+  const [status, setStatus] = useState<AuthStatus>('booting');
 
-  const persistTokens = (bundle: TokenBundle | null) => {
-    if (!bundle) {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      setAccessToken(null);
-      return;
-    }
-    localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(bundle));
-    setAccessToken(bundle.accessToken);
-  };
-
-  const loadProfile = async (tokenBundle: TokenBundle) => {
-    const me = await apiClient<User>('/auth/me', {
-      headers: { Authorization: `Bearer ${tokenBundle.accessToken}` },
-    });
-    setUser(me);
-  };
-
-  useEffect(() => {
-    const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!raw) {
-      setLoading(false);
-      return;
-    }
-    const stored = JSON.parse(raw) as TokenBundle;
-    setAccessToken(stored.accessToken);
-    loadProfile(stored)
-      .catch(() => persistTokens(null))
-      .finally(() => setLoading(false));
+  const syncToken = useCallback((token: string | null) => {
+    setAccessToken(token);
+    setAccessTokenState(token);
   }, []);
 
-  const login = async (email: string, password: string, remember?: boolean) => {
-    setLoading(true);
-    const res = await apiClient<{ user: User; tokens: TokenBundle }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, remember }),
+  const logout = useCallback(() => {
+    api.post('/auth/logout', {}, NO_AUTH_CONFIG).catch(() => {
+      /* ignore */
     });
-    const bundle = {
-      accessToken: res.tokens.accessToken,
-      refreshToken: res.tokens.refreshToken,
-      userId: res.user.id,
+    syncToken(null);
+    setUser(null);
+    setStatus('guest');
+  }, [syncToken]);
+
+  const loadProfile = useCallback(async () => {
+    const res = await api.get<User>('/auth/me');
+    setUser(res.data);
+    return res.data;
+  }, []);
+
+  const refreshToken = useCallback(async () => {
+    const res = await api.post<{ accessToken: string | null }>('/auth/refresh', {}, NO_AUTH_CONFIG);
+    const token = res.data?.accessToken ?? null;
+    syncToken(token);
+    return token;
+  }, [syncToken]);
+
+  useEffect(() => {
+    const unsubscribe = onAccessTokenChange((token) => setAccessTokenState(token));
+    setupInterceptors(getAccessToken, syncToken, logout);
+    return () => {
+      unsubscribe();
     };
-    if (remember) persistTokens(bundle);
-    setAccessToken(bundle.accessToken);
-    setUser(res.user);
-    setLoading(false);
-    return res.user;
+  }, [logout, syncToken]);
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      setStatus('booting');
+      try {
+        const token = await refreshToken();
+        if (token) {
+          await loadProfile();
+          setStatus('authed');
+        } else {
+          setStatus('guest');
+        }
+      } catch {
+        logout();
+      }
+    };
+    void bootstrap();
+  }, [loadProfile, logout, refreshToken]);
+
+  const login = async (email: string, password: string) => {
+    setStatus('booting');
+    const res = await api.post<{ user: User; accessToken: string }>(
+      '/auth/login',
+      { email, password },
+      NO_AUTH_CONFIG,
+    );
+    syncToken(res.data.accessToken);
+    setUser(res.data.user);
+    setStatus('authed');
+    return res.data.user;
   };
 
   const register = async (payload: { email: string; password: string; fullName?: string }) => {
-    setLoading(true);
-    const res = await apiClient<{ ok: boolean; message?: string }>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    setLoading(false);
-    return res.message;
+    const res = await api.post<{ ok: boolean; message?: string }>(
+      '/auth/register',
+      payload,
+      NO_AUTH_CONFIG,
+    );
+    return res.data.message;
   };
 
   const refresh = async () => {
-    const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!raw) return;
-    const stored = JSON.parse(raw) as TokenBundle;
-    const tokens = await apiClient<TokenBundle>('/auth/refresh', {
-      method: 'POST',
-      body: JSON.stringify({ refreshToken: stored.refreshToken, userId: stored.userId }),
-    });
-    persistTokens({ ...tokens, userId: stored.userId });
-    await loadProfile({ ...tokens, userId: stored.userId });
+    try {
+      const token = await refreshToken();
+      if (token) {
+        await loadProfile();
+        setStatus('authed');
+      } else {
+        setStatus('guest');
+      }
+      return token;
+    } catch {
+      logout();
+      return null;
+    }
   };
 
   const googleLogin = async () => {
@@ -112,22 +140,18 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       }, 120000);
 
       const handler = (event: MessageEvent) => {
-        const data = event.data as { source?: string; payload?: { user: User; tokens: TokenBundle } };
+        const data = event.data as { source?: string; payload?: { user: User; accessToken: string } };
         if (data?.source !== 'google-login' || !data.payload) return;
         window.clearTimeout(timer);
         window.removeEventListener('message', handler);
         try {
           if (popup && !popup.closed) popup.close();
         } catch {
-          // ignore COOP warnings when closing cross-origin popup
+          /* ignore cross-origin close warning */
         }
-        const bundle = {
-          accessToken: data.payload.tokens.accessToken,
-          refreshToken: data.payload.tokens.refreshToken,
-          userId: data.payload.user.id,
-        };
-        persistTokens(bundle);
+        syncToken(data.payload.accessToken);
         setUser(data.payload.user);
+        setStatus('authed');
         resolve(data.payload.user);
       };
 
@@ -135,12 +159,17 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     });
   };
 
-  const logout = () => {
-    persistTokens(null);
-    setUser(null);
+  const value: AuthContextValue = {
+    status,
+    user,
+    accessToken: accessTokenState,
+    loading: status === 'booting',
+    login,
+    register,
+    logout,
+    refresh,
+    googleLogin,
   };
-
-  const value = { user, accessToken, loading, login, register, logout, refresh, googleLogin };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

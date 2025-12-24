@@ -17,7 +17,7 @@ export const ForgotPasswordPage = () => {
     setError('');
     setSent(false);
     if (!email.trim()) {
-      setFieldError('Vui long nhap email');
+      setFieldError('Vui lòng nhập email');
       return;
     }
     setFieldError('');
@@ -28,13 +28,13 @@ export const ForgotPasswordPage = () => {
       });
       setSent(true);
     } catch (err) {
-      setError((err as Error)?.message || 'Khong the gui email khoi phuc');
+      setError((err as Error)?.message || 'Không thể gửi email khôi phục');
     }
   };
 
   return (
     <div className="max-w-lg mx-auto min-h-[70vh] flex items-center w-full">
-      <Card title="Reset your password" className="w-full">
+      <Card title="Đặt lại mật khẩu" className="w-full">
         <form onSubmit={onSubmit} className="space-y-4">
           <FormField
             label="Email"
@@ -49,18 +49,18 @@ export const ForgotPasswordPage = () => {
           />
           {error ? <div className="text-error text-sm">{error}</div> : null}
           <Button type="submit" className="w-full">
-            Send reset link
+            Gửi liên kết đặt lại
           </Button>
         </form>
         {sent ? (
           <div className="mt-4 text-sm text-success">
-            If your account exists, a reset link was sent to your email.
+            Nếu tài khoản tồn tại, liên kết đặt lại đã được gửi tới email của bạn.
           </div>
         ) : null}
         <div className="mt-4 text-sm text-gray-300 text-center">
-          Remembered it?{' '}
+          Nhớ lại mật khẩu rồi?{' '}
           <Link to="/login" className="text-secondary hover:underline">
-            Back to login
+            Quay lại đăng nhập
           </Link>
         </div>
       </Card>

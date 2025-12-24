@@ -4,11 +4,11 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import type { Response } from 'express';
 import * as bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
-import * as nodemailer from 'nodemailer';
 import { UsersService } from '../users/users.service';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
@@ -16,54 +16,41 @@ import { JwtPayload } from './interfaces/jwt-payload';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { GoogleLoginDto } from './dto/google-login.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { VerifyRequestDto } from './dto/verify-request.dto';
+import { MailService } from '../mail/mail.service';
 
 type Tokens = { accessToken: string; refreshToken: string };
 
 @Injectable()
 export class AuthService {
-  private googleClient: OAuth2Client;
   private oauthClient: OAuth2Client;
-  private mailer?: nodemailer.Transporter;
 
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {
     const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
     const clientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
     const redirectUri =
       this.configService.get<string>('GOOGLE_REDIRECT_URI') ||
       'http://localhost:3000/api/auth/google/callback';
-    this.googleClient = new OAuth2Client(clientId);
     this.oauthClient = new OAuth2Client(clientId, clientSecret, redirectUri);
-    const smtpHost = this.configService.get<string>('SMTP_HOST');
-    const smtpUser = this.configService.get<string>('SMTP_USER');
-    const smtpPass = this.configService.get<string>('SMTP_PASS');
-    const smtpPort = this.configService.get<number>('SMTP_PORT') || 587;
-    if (smtpHost && smtpUser && smtpPass) {
-      this.mailer = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      });
-    }
   }
 
   private async signTokens(payload: JwtPayload): Promise<Tokens> {
+    const accessExpiresIn: JwtSignOptions['expiresIn'] =
+      this.configService.get<JwtSignOptions['expiresIn']>('ACCESS_TOKEN_EXPIRES_IN') ?? '15m';
+    const refreshExpiresIn: JwtSignOptions['expiresIn'] =
+      this.configService.get<JwtSignOptions['expiresIn']>('REFRESH_TOKEN_EXPIRES_IN') ?? '7d';
     const accessToken = await this.jwtService.signAsync(payload, {
-      expiresIn: '15m',
+      expiresIn: accessExpiresIn,
     });
     const refreshToken = await this.jwtService.signAsync(payload, {
-      expiresIn: '7d',
-      secret: this.configService.get('JWT_REFRESH_SECRET') || 'refresh-secret',
+      expiresIn: refreshExpiresIn,
+      secret: this.configService.get('JWT_REFRESH_SECRET'),
     });
     await this.usersService.setRefreshToken(payload.sub, refreshToken);
     return { accessToken, refreshToken };
@@ -71,12 +58,12 @@ export class AuthService {
 
   async register(dto: CreateUserDto) {
     const existing = await this.usersService.findByEmail(dto.email);
-    if (existing) throw new BadRequestException('Email already registered');
+    if (existing) throw new BadRequestException('Email đã được sử dụng');
     const user = await this.usersService.createLocal(dto);
     await this.sendVerification(user.email, user.id);
     return {
       ok: true,
-      message: 'Verification email sent. Please confirm to log in.',
+      message: 'Đã gửi email xác thực. Vui lòng xác nhận để đăng nhập.',
       userId: user.id,
     };
   }
@@ -84,48 +71,14 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.usersService.findByEmail(dto.email);
     if (!user || !user.passwordHash)
-      throw new UnauthorizedException('Invalid credentials');
-    if (!user.verified)
-      throw new ForbiddenException('Please verify your email first.');
-    if (user.status === 'suspended')
-      throw new ForbiddenException('Account suspended');
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
-      throw new ForbiddenException('Account is temporarily locked');
-    }
+      throw new UnauthorizedException('Thông tin đăng nhập không hợp lệ');
+    if (user.status === 'banned')
+      throw new ForbiddenException('Tài khoản bị cấm');
+    if (user.status === 'pending' || !user.verified)
+      throw new ForbiddenException('Vui lòng xác thực email trước khi đăng nhập.');
     const passwordOk = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!passwordOk) {
-      const attempts = user.failedLoginAttempts + 1;
-      const lock =
-        attempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : undefined;
-      await this.usersService.updateFailedAttempts(user.id, attempts, lock);
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    await this.usersService.updateFailedAttempts(user.id, 0, undefined);
-    const tokens = await this.signTokens({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    });
-    return { user, tokens };
-  }
-
-  async googleLogin(dto: GoogleLoginDto) {
-    const ticket = await this.googleClient.verifyIdToken({
-      idToken: dto.idToken,
-      audience: this.configService.get<string>('GOOGLE_CLIENT_ID'),
-    });
-    const payload = ticket.getPayload();
-    if (!payload?.email)
-      throw new UnauthorizedException('Invalid Google token');
-    const user = await this.usersService.createFromProvider(payload.email, {
-      fullName: payload.name,
-      avatarUrl: payload.picture,
-      provider: 'google',
-      verified: payload.email_verified ?? true,
-    });
-    if (user.status === 'suspended')
-      throw new ForbiddenException('Account suspended');
+    if (!passwordOk)
+      throw new UnauthorizedException('Thông tin đăng nhập không hợp lệ');
     const tokens = await this.signTokens({
       sub: user.id,
       email: user.email,
@@ -145,14 +98,14 @@ export class AuthService {
   async handleGoogleOAuthCode(code: string) {
     try {
       const { tokens } = await this.oauthClient.getToken(code);
-      if (!tokens.id_token) throw new UnauthorizedException('Missing id token');
+      if (!tokens.id_token) throw new UnauthorizedException('Thiếu id token');
       const ticket = await this.oauthClient.verifyIdToken({
         idToken: tokens.id_token,
         audience: this.configService.get<string>('GOOGLE_CLIENT_ID'),
       });
       const payload = ticket.getPayload();
       if (!payload?.email)
-        throw new UnauthorizedException('Invalid Google token');
+        throw new UnauthorizedException('Token Google không hợp lệ');
       const user = await this.usersService.createFromProvider(payload.email, {
         fullName: payload.name,
         avatarUrl: payload.picture,
@@ -167,23 +120,20 @@ export class AuthService {
       return { user, tokens: sessionTokens };
     } catch (err) {
       const reason = (err as Error).message?.includes('redirect_uri_mismatch')
-        ? 'Google redirect_uri mismatch. Check GOOGLE_REDIRECT_URI in .env and OAuth console.'
+        ? 'Sai redirect_uri Google. Kiểm tra GOOGLE_REDIRECT_URI trong .env và cấu hình OAuth.'
         : (err as Error).message;
-      throw new UnauthorizedException(reason || 'Google login failed');
+      throw new UnauthorizedException(reason || 'Đăng nhập Google thất bại');
     }
   }
 
-  async refresh(userId: string, refreshToken: string) {
+  async refresh(refreshToken: string) {
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(
         refreshToken,
         {
-          secret:
-            this.configService.get('JWT_REFRESH_SECRET') || 'refresh-secret',
+          secret: this.configService.get('JWT_REFRESH_SECRET'),
         },
       );
-      // bảo vệ: id trong token phải khớp với input và với bản ghi DB
-      if (userId && payload.sub !== userId) throw new UnauthorizedException();
       const user = await this.usersService.findById(payload.sub);
       if (!user || !user.refreshTokenHash) throw new UnauthorizedException();
       const match = await bcrypt.compare(refreshToken, user.refreshTokenHash);
@@ -194,52 +144,54 @@ export class AuthService {
         role: user.role,
       });
     } catch {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('Refresh token không hợp lệ');
     }
+  }
+
+  async logout(userId: string, res: Response) {
+    await this.usersService.clearRefreshToken(userId);
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      sameSite: 'none',
+      secure: true,
+      path: '/api/auth',
+    });
+    return { ok: true };
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
     const user = await this.usersService.findByEmail(dto.email);
-    if (!user) return { ok: true }; // do not leak
+    if (!user) throw new BadRequestException('Không tìm thấy nguời dùng');
     const token = await this.jwtService.signAsync(
       { sub: user.id, email: user.email, kind: 'reset' },
       {
         expiresIn: '1h',
-        secret: this.configService.get('RESET_SECRET') || 'reset-secret',
+        secret: this.configService.get('RESET_SECRET'),
       },
     );
     const frontend =
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const resetLink = `${frontend}/reset?token=${token}`;
 
-    if (this.mailer) {
-      try {
-        await this.mailer.sendMail({
-          to: user.email,
-          from:
-            this.configService.get<string>('SMTP_FROM') ||
-            this.configService.get<string>('SMTP_USER'),
-          subject: 'Reset your password',
-          html: `
-            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:16px;background:#f5f7fb;color:#1f2937;border-radius:12px;border:1px solid #e5e7eb;">
-              <h2 style="margin-top:0;color:#111827;">Hello from BusTicket One,</h2>
-              <p>We received a request to reset your password. Click the button below to set a new one.</p>
-              <div style="text-align:center;margin:24px 0;">
-                <a href="${resetLink}" style="background:#14b8a6;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Reset password</a>
-              </div>
-              <p>If the button doesn't work, copy this link:</p>
-              <p style="word-break:break-all;font-size:12px;color:#374151;">${resetLink}</p>
-              <p style="font-size:12px;color:#6b7280;">If you didn't request this, you can ignore this email.</p>
-            </div>
-          `,
-        });
-      } catch (err) {
-        console.error('Failed to send reset email', err);
-      }
-    } else {
-      console.info(`Reset link for ${user.email}: ${resetLink}`);
-    }
-    return { ok: true, message: 'Reset email sent if account exists.' };
+    await this.mailService.sendMail({
+      to: user.email,
+      subject: 'Đặt lại mật khẩu',
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:16px;background:#f5f7fb;color:#1f2937;border-radius:12px;border:1px solid #e5e7eb;">
+          <h2 style="margin-top:0;color:#111827;">Xin chào bạn,</h2>
+          <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu của bạn. Nhấn nút dưới đây để đặt mật khẩu mới.</p>
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${resetLink}" style="background:#14b8a6;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Đặt lại mật khẩu</a>
+          </div>
+          <p>Nếu nút không hoạt động, hãy sao chép liên kết này:</p>
+          <p style="word-break:break-all;font-size:12px;color:#374151;">${resetLink}</p>
+          <p style="font-size:12px;color:#6b7280;">Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>
+        </div>
+      `,
+      fallbackLog: `Reset link cho ${user.email}: ${resetLink}`,
+      errorLabel: 'reset email',
+    });
+    return { ok: true, message: 'Email đặt lại mật khẩu đã được gửi nếu tài khoản tồn tại.' };
   }
 
   private async sendVerification(email: string, userId: string) {
@@ -247,47 +199,38 @@ export class AuthService {
       { sub: userId, email, kind: 'verify' },
       {
         expiresIn: '1h',
-        secret: this.configService.get('VERIFY_SECRET') || 'verify-secret',
+        secret: this.configService.get('VERIFY_SECRET'),
       },
     );
     const frontend =
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const verifyLink = `${frontend}/verify?token=${token}`;
 
-    if (this.mailer) {
-      try {
-        await this.mailer.sendMail({
-          to: email,
-          from:
-            this.configService.get<string>('SMTP_FROM') ||
-            this.configService.get<string>('SMTP_USER'),
-          subject: 'Verify your email',
-          html: `
-            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:16px;background:#f5f7fb;color:#1f2937;border-radius:12px;border:1px solid #e5e7eb;">
-              <h2 style="margin-top:0;color:#111827;">Hello from BusTicket One,</h2>
-              <p>Thanks for signing up. Please confirm your email to continue.</p>
-              <div style="text-align:center;margin:24px 0;">
-                <a href="${verifyLink}" style="background:#14b8a6;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Verify email</a>
-              </div>
-              <p>If the button doesn't work, copy this link:</p>
-              <p style="word-break:break-all;font-size:12px;color:#374151;">${verifyLink}</p>
-              <p style="font-size:12px;color:#6b7280;">If you didn't request this, you can ignore this email.</p>
-            </div>
-          `,
-        });
-      } catch (err) {
-        console.error('Failed to send verification email', err);
-      }
-    } else {
-      console.info(`Verify link for ${email}: ${verifyLink}`);
-    }
+    await this.mailService.sendMail({
+      to: email,
+      subject: 'Xác thực email',
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:16px;background:#f5f7fb;color:#1f2937;border-radius:12px;border:1px solid #e5e7eb;">
+          <h2 style="margin-top:0;color:#111827;">Xin chào bạn,</h2>
+          <p>Cảm ơn bạn đã đăng ký. Vui lòng xác nhận email để tiếp tục.</p>
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${verifyLink}" style="background:#14b8a6;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Xác thực email</a>
+          </div>
+          <p>Nếu nút không hoạt động, hãy sao chép liên kết này:</p>
+          <p style="word-break:break-all;font-size:12px;color:#374151;">${verifyLink}</p>
+          <p style="font-size:12px;color:#6b7280;">Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>
+        </div>
+      `,
+      fallbackLog: `Liên kết xác thực cho ${email}: ${verifyLink}`,
+      errorLabel: 'verification email',
+    });
     return token;
   }
 
   async requestVerification(dto: VerifyRequestDto) {
     const user = await this.usersService.findByEmail(dto.email);
-    if (!user) return { ok: true }; // avoid leaking
-    if (user.verified) return { ok: true, message: 'Already verified' };
+    if (!user) throw new BadRequestException('Không tìm thấy người dùng');
+    if (user.verified) return { ok: true, message: 'Email đã được xác thực' };
     const token = await this.sendVerification(user.email, user.id);
     return { ok: true, token };
   }
@@ -297,12 +240,14 @@ export class AuthService {
       sub: string;
       kind: string;
     }>(dto.token, {
-      secret: this.configService.get('VERIFY_SECRET') || 'verify-secret',
+      secret: this.configService.get('VERIFY_SECRET'),
     });
     if (payload.kind !== 'verify') throw new UnauthorizedException();
     const user = await this.usersService.findById(payload.sub);
     if (!user) throw new UnauthorizedException();
-    await this.usersService.verifyUser(user.id);
+    if (user.status === 'banned')
+      throw new ForbiddenException('Tài khoản đã bị cấm');
+    await this.usersService.verifyUser(user.id, user.status);
     return { ok: true };
   }
 
@@ -311,7 +256,7 @@ export class AuthService {
       sub: string;
       kind: string;
     }>(dto.token, {
-      secret: this.configService.get('RESET_SECRET') || 'reset-secret',
+      secret: this.configService.get('RESET_SECRET'),
     });
     if (payload.kind !== 'reset') throw new UnauthorizedException();
     const user = await this.usersService.findById(payload.sub);
@@ -325,9 +270,9 @@ export class AuthService {
     const user = await this.usersService.findById(userId);
     if (!user || !user.passwordHash) throw new UnauthorizedException();
     const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
-    if (!valid) throw new UnauthorizedException('Wrong current password');
+    if (!valid) throw new UnauthorizedException('Mật khẩu hiện tại không đúng');
     if (dto.newPassword === dto.currentPassword)
-      throw new BadRequestException('New password must differ');
+      throw new BadRequestException('Mật khẩu mới phải khác mật khẩu hiện tại');
     await this.usersService.clearRefreshToken(user.id);
     await this.usersService.updatePassword(user.id, dto.newPassword);
     return { ok: true };

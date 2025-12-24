@@ -6,9 +6,10 @@ import { Button } from '../ui/Button';
 import clsx from 'clsx';
 
 export const AppShell = ({ children }: PropsWithChildren) => {
-  const { user, logout } = useAuth();
+  const { user, status, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const booting = status === 'booting';
 
   return (
     <div className="min-h-screen text-gray-100 bg-[#0b1021]">
@@ -36,7 +37,9 @@ export const AppShell = ({ children }: PropsWithChildren) => {
           )}
         </nav>
         <div className="flex items-center gap-3">
-          {user ? (
+          {booting ? (
+            <div className="h-10 w-28 rounded-xl bg-white/10 animate-pulse" aria-label="Loading session" />
+          ) : user ? (
             <>
               <div className="relative">
                 <div

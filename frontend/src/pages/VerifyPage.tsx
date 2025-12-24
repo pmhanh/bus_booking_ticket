@@ -21,16 +21,16 @@ export const VerifyPage = () => {
         setTimeout(() => navigate('/login'), 800);
       })
       .catch((err: Error) => {
-        setError(err.message || 'Verification failed');
+        setError(err.message || 'Xác thực thất bại');
         setStatus('error');
       });
   }, [params, navigate]);
 
   return (
     <div className="max-w-xl mx-auto mt-16 text-center text-white">
-      {status === 'verifying' && <div className="text-lg font-semibold">Verifying your email...</div>}
-      {status === 'done' && <div className="text-lg font-semibold text-success">Email verified! Redirecting...</div>}
-      {status === 'idle' && <div className="text-lg font-semibold">Waiting for verification token...</div>}
+      {status === 'verifying' && <div className="text-lg font-semibold">Đang xác thực email...</div>}
+      {status === 'done' && <div className="text-lg font-semibold text-success">Xác thực email thành công! Đang chuyển hướng...</div>}
+      {status === 'idle' && <div className="text-lg font-semibold">Chưa có mã xác thực...</div>}
       {status === 'error' && <div className="text-lg font-semibold text-error">{error}</div>}
     </div>
   );

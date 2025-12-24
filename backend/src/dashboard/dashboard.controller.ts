@@ -13,19 +13,19 @@ export class DashboardController {
     return {
       user,
       summary: [
-        { label: 'Tickets Sold', value: 482, trend: '+12%' },
-        { label: 'Revenue', value: '$18.2k', trend: '+5%' },
-        { label: 'On-time Rate', value: '93%', trend: '+2%' },
+        { label: 'Vé đã bán', value: 482, trend: '+12%' },
+        { label: 'Doanh thu', value: '$18.2k', trend: '+5%' },
+        { label: 'Tỷ lệ đúng giờ', value: '93%', trend: '+2%' },
       ],
       activity: [
-        { id: 1, message: 'New booking from Mai Nguyen', time: '5m ago' },
-        { id: 2, message: 'Route HN - HCM delayed by 10m', time: '32m ago' },
-        { id: 3, message: 'New partner bus added: Sunrise', time: '1h ago' },
+        { id: 1, message: 'Đơn đặt mới từ Mai Nguyễn', time: '5 phút trước' },
+        { id: 2, message: 'Tuyến HN - HCM trễ 10 phút', time: '32 phút trước' },
+        { id: 3, message: 'Thêm nhà xe đối tác mới: Sunrise', time: '1 giờ trước' },
       ],
       routes: [
-        { route: 'Ha Noi → Da Nang', occupancy: 0.78 },
-        { route: 'HCM → Can Tho', occupancy: 0.61 },
-        { route: 'Da Nang → Hue', occupancy: 0.52 },
+        { route: 'Hà Nội → Đà Nẵng', occupancy: 0.78 },
+        { route: 'HCM → Cần Thơ', occupancy: 0.61 },
+        { route: 'Đà Nẵng → Huế', occupancy: 0.52 },
       ],
     };
   }
@@ -36,7 +36,7 @@ export class DashboardController {
   adminMetrics() {
     return {
       auditsThisWeek: 12,
-      suspendedUsers: 2,
+      bannedUsers: 2,
       flaggedPayments: 1,
     };
   }

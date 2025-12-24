@@ -8,6 +8,7 @@ import {
 
 export type UserRole = 'admin' | 'agent' | 'user';
 export type AuthProvider = 'local' | 'google';
+export type UserStatus = 'pending' | 'active' | 'banned';
 
 @Entity({ name: 'users' })
 export class User {
@@ -32,8 +33,8 @@ export class User {
   @Column({ default: 'local' })
   provider: AuthProvider;
 
-  @Column({ default: 'active' })
-  status: 'active' | 'suspended';
+  @Column({ default: 'pending' })
+  status: UserStatus;
 
   @Column({ nullable: true })
   avatarUrl?: string;

@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
+import { useAuth } from './context/AuthContext';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -22,6 +23,16 @@ import { BookingsPage } from './pages/BookingsPage';
 import { SeatSelectionPage } from './pages/SeatSelectionPage';
 
 function App() {
+  const { status } = useAuth();
+
+  if (status === 'booting') {
+    return (
+      <AppShell>
+        <div className="py-16 text-center text-white"></div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <Routes>

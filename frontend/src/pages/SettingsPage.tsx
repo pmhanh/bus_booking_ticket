@@ -40,10 +40,10 @@ export const SettingsPage = () => {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <Card title="Security">
+      <Card title="Đổi mật khẩu">
         <form className="space-y-3" onSubmit={changePassword}>
           <FormField
-            label="Current password"
+            label="Mật khẩu hiện tại"
             type="password"
             value={pw.current}
             onChange={(e) => {
@@ -54,7 +54,7 @@ export const SettingsPage = () => {
             error={fieldErrors.current}
           />
           <FormField
-            label="New password"
+            label="Mật khẩu mới"
             type="password"
             value={pw.next}
             minLength={8}
@@ -66,7 +66,7 @@ export const SettingsPage = () => {
             error={fieldErrors.next}
           />
           <FormField
-            label="Confirm new password"
+            label="Xác nhận mật khẩu mới"
             type="password"
             value={pw.confirm}
             minLength={8}
@@ -80,7 +80,7 @@ export const SettingsPage = () => {
           {error ? <div className="text-error text-sm">{error}</div> : null}
           {message ? <div className="text-success text-sm">{message}</div> : null}
           <Button type="submit" className="w-full">
-            Update password
+            Cập nhật mật khẩu
           </Button>
         </form>
       </Card>

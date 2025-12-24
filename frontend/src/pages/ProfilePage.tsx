@@ -23,13 +23,13 @@ export const ProfilePage = () => {
       body: JSON.stringify(profile),
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    setMessage('Profile updated');
+    setMessage('Cập nhật hồ sơ thành công');
     refresh();
   };
 
   return (
     <div className="max-w-4xl mx-auto">
-      <Card title="Profile">
+      <Card title="Hồ sơ">
         <form className="space-y-3" onSubmit={updateProfile}>
           <FormField
             label="Email"
@@ -38,22 +38,22 @@ export const ProfilePage = () => {
             className="opacity-60 cursor-not-allowed"
           />
           <FormField
-            label="Full name"
+            label="Họ tên"
             value={profile.fullName}
             onChange={(e) => setProfile({ ...profile, fullName: e.target.value })}
           />
           <FormField
-            label="Phone"
+            label="Số điện thoại"
             value={profile.phone}
             onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
           />
           <FormField
-            label="Avatar URL"
+            label="URL ảnh đại diện"
             value={profile.avatarUrl}
             onChange={(e) => setProfile({ ...profile, avatarUrl: e.target.value })}
           />
           <Button type="submit" className="w-full">
-            Save changes
+            Lưu thay đổi
           </Button>
         </form>
         {message ? <div className="mt-3 text-success text-sm">{message}</div> : null}

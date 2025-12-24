@@ -13,10 +13,10 @@ export const RegisterPage = () => {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ fullName?: string; email?: string; password?: string }>({});
-  const passwordRule = /^(?=.*[a-z])(?=.*[A-Z]).{8,}$/;
+  const passwordRule = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 
   const parseErrorMessage = (err: unknown) => {
-    const fallback = (err as Error)?.message || 'Da co loi xay ra';
+    const fallback = (err as Error)?.message || 'Đã có lỗi xảy ra';
     try {
       const parsed = JSON.parse(fallback) as { message?: string | string[] };
       if (Array.isArray(parsed.message)) return parsed.message.join(', ');
@@ -32,32 +32,32 @@ export const RegisterPage = () => {
     setError('');
     setInfo('');
     const nextErrors: { fullName?: string; email?: string; password?: string } = {};
-    if (!form.fullName.trim()) nextErrors.fullName = 'Vui long nhap ho ten';
-    if (!form.email.trim()) nextErrors.email = 'Vui long nhap email';
-    if (!form.password.trim()) nextErrors.password = 'Vui long nhap mat khau';
+    if (!form.fullName.trim()) nextErrors.fullName = 'Vui lòng nhập họ tên';
+    if (!form.email.trim()) nextErrors.email = 'Vui lòng nhập email';
+    if (!form.password.trim()) nextErrors.password = 'Vui lòng nhập mật khẩu';
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     if (!passwordRule.test(form.password)) {
-      setError('Mat khau can toi thieu 8 ky tu, co chu thuong va chu hoa.');
+      setError('Mật khẩu cần tối thiểu 8 ký tự, có chữ thường, chữ hoa và số.');
       return;
     }
     try {
       const message = await register(form);
-      const successMessage = message || 'Verification email sent. Please check your inbox.';
+      const successMessage = message || 'Email xác thực đã được gửi. Vui lòng kiểm tra hộp thư.';
       setInfo(successMessage);
       setTimeout(() => navigate('/login'), 1200);
     } catch (err) {
-      const message = parseErrorMessage(err) || 'Registration failed';
+      const message = parseErrorMessage(err) || 'Đã có lỗi xảy ra';
       setError(message);
     }
   };
 
   return (
     <div className="max-w-lg mx-auto min-h-[70vh] flex items-center w-full">
-      <Card title="Create your account" className="w-full">
+      <Card title="Tạo tài khoản" className="w-full">
         <form onSubmit={onSubmit} className="space-y-4">
           <FormField
-            label="Full name"
+            label="Họ tên"
             value={form.fullName}
             required
             onChange={(e) => {
@@ -78,11 +78,11 @@ export const RegisterPage = () => {
             error={fieldErrors.email}
           />
           <FormField
-            label="Password"
+            label="Mật khẩu"
             type="password"
             required
             minLength={8}
-            placeholder="At least 8 characters"
+            placeholder="Tối thiểu 8 ký tự"
             value={form.password}
             onChange={(e) => {
               setForm({ ...form, password: e.target.value });
@@ -93,13 +93,13 @@ export const RegisterPage = () => {
           {error ? <div className="text-error text-sm">{error}</div> : null}
           {info ? <div className="text-success text-sm">{info}</div> : null}
           <Button type="submit" className="w-full">
-            Register
+            Đăng ký
           </Button>
         </form>
         <div className="mt-4 text-sm text-gray-300 text-center">
-          Already have an account?{' '}
+          Đã có tài khoản?{' '}
           <Link to="/login" className="text-secondary hover:underline">
-            Sign in
+            Đăng nhập
           </Link>
         </div>
       </Card>

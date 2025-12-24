@@ -11,6 +11,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
+import { UserStatus } from './user.entity';
 
 @Roles('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -30,7 +31,7 @@ export class UsersController {
   @Patch(':id/status')
   setStatus(
     @Param('id') id: string,
-    @Body() body: { status: 'active' | 'suspended' },
+    @Body() body: { status: UserStatus },
   ) {
     return this.usersService.updateStatus(id, body.status);
   }

@@ -23,7 +23,7 @@ import { UpdateProfileDto } from '../users/dto/update-profile.dto';
 import { UsersService } from '../users/users.service';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { VerifyRequestDto } from './dto/verify-request.dto';
-import type { Response, Request } from 'express';
+import type { Response, Request, CookieOptions } from 'express';
 import { ConfigService } from '@nestjs/config';
 
 @Controller('auth')
@@ -33,6 +33,17 @@ export class AuthController {
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
   ) {}
+
+  private getRefreshCookieOptions(): CookieOptions {
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    return {
+      httpOnly: true,
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/api/auth',
+    };
+  }
 
   @Post('register')
   register(@Body() dto: CreateUserDto) {
@@ -137,12 +148,6 @@ export class AuthController {
   }
 
   private setRefreshCookie(res: Response, token: string) {
-    res.cookie('refresh_token', token, {
-      httpOnly: true,
-      sameSite: 'none',
-      secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/api/auth',
-    });
+    res.cookie('refresh_token', token, this.getRefreshCookieOptions());
   }
 }

@@ -19,10 +19,32 @@ export class UsersService {
       select: ['id', 'email', 'fullName', 'role', 'status', 'verified'] });
   }
 
+  findByEmailWithPassword(email: string) {
+    return this.repo.findOne({
+      where: { email },
+      select: [
+        'id',
+        'email',
+        'fullName',
+        'role',
+        'status',
+        'verified',
+        'passwordHash',
+      ],
+    });
+  }
+
   findById(id: string) {
     return this.repo.findOne({ 
       where: { id },
       select: ['id', 'email', 'fullName', 'role', 'status', 'verified'] 
+    });
+  }
+
+  findByIdWithRefreshToken(id: string) {
+    return this.repo.findOne({
+      where: { id },
+      select: ['id', 'email', 'role', 'refreshTokenHash'],
     });
   }
 

@@ -69,7 +69,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.usersService.findByEmail(dto.email);
+    const user = await this.usersService.findByEmailWithPassword(dto.email);
     if (!user || !user.passwordHash)
       throw new UnauthorizedException('Thông tin đăng nhập không hợp lệ');
     if (user.status === 'banned')
@@ -134,7 +134,7 @@ export class AuthService {
           secret: this.configService.get('JWT_REFRESH_SECRET'),
         },
       );
-      const user = await this.usersService.findById(payload.sub);
+      const user = await this.usersService.findByIdWithRefreshToken(payload.sub);
       if (!user || !user.refreshTokenHash) throw new UnauthorizedException();
       const match = await bcrypt.compare(refreshToken, user.refreshTokenHash);
       if (!match) throw new UnauthorizedException();
@@ -150,10 +150,11 @@ export class AuthService {
 
   async logout(userId: string, res: Response) {
     await this.usersService.clearRefreshToken(userId);
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
     res.clearCookie('refresh_token', {
       httpOnly: true,
-      sameSite: 'none',
-      secure: true,
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
       path: '/api/auth',
     });
     return { ok: true };

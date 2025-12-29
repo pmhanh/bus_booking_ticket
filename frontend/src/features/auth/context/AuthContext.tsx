@@ -38,7 +38,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const logout = useCallback(() => {
-    api.post('/auth/logout', {}, NO_AUTH_CONFIG).catch(() => {
+    api.post('/auth/logout').catch(() => {
     });
     syncToken(null);
     setUser(null);
@@ -86,15 +86,20 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
 
   const login = async (email: string, password: string) => {
     setStatus('booting');
-    const res = await api.post<{ user: User; accessToken: string }>(
-      '/auth/login',
-      { email, password },
-      NO_AUTH_CONFIG,
-    );
-    syncToken(res.data.accessToken);
-    setUser(res.data.user);
-    setStatus('authed');
-    return res.data.user;
+    try {
+      const res = await api.post<{ user: User; accessToken: string }>(
+        '/auth/login',
+        { email, password },
+        NO_AUTH_CONFIG,
+      );
+      syncToken(res.data.accessToken);
+      setUser(res.data.user);
+      setStatus('authed');
+      return res.data.user;
+    } catch (error) {
+      setStatus('guest'); // reset loading state so UI returns to login on failure (e.g., unverified email)
+      throw error;
+    }
   };
 
   const register = async (payload: { email: string; password: string; fullName?: string }) => {

@@ -70,10 +70,12 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(200)
-  @UseGuards(JwtAuthGuard)
-  logout(@CurrentUser() user: JwtPayload, @Res({ passthrough: true }) res: Response) {
-    return this.authService.logout(user.sub, res);
+  async logout(@Req() req: Request, @Res() res: Response) {
+    const cookieOptions = this.getRefreshCookieOptions();
+    res.clearCookie('refresh_token', { ...cookieOptions, maxAge: 0 });
+    return res.json({ message: 'Logged out' });
   }
+
 
   @Post('forgot')
   forgot(@Body() dto: ForgotPasswordDto) {

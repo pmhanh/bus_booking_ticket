@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import * as bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import { UsersService } from '../users/users.service';
@@ -78,13 +78,14 @@ export class AuthService {
       throw new ForbiddenException('Vui lòng xác thực email trước khi đăng nhập.');
     const passwordOk = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordOk)
-      throw new UnauthorizedException('Thông tin đăng nhập không hợp lệ');
+      throw new UnauthorizedException('Tài khoản hoặc mật khẩu không chính xác');
     const tokens = await this.signTokens({
       sub: user.id,
       email: user.email,
       role: user.role,
     });
-    return { user, tokens };
+    const { passwordHash, ...safeUser } = user;
+    return { user: safeUser, tokens };
   }
 
   buildGoogleOAuthUrl() {
@@ -146,18 +147,6 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Refresh token không hợp lệ');
     }
-  }
-
-  async logout(userId: string, res: Response) {
-    await this.usersService.clearRefreshToken(userId);
-    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
-    res.clearCookie('refresh_token', {
-      httpOnly: true,
-      sameSite: isProduction ? 'none' : 'lax',
-      secure: isProduction,
-      path: '/api/auth',
-    });
-    return { ok: true };
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {

@@ -36,20 +36,11 @@ export class User {
   @Column({ default: 'pending' })
   status: UserStatus;
 
-  @Column({ nullable: true })
-  avatarUrl?: string;
-
   @Column({ default: false })
   verified: boolean;
 
   @Column({ type: 'text', nullable: true })
   refreshTokenHash?: string | null;
-
-  @Column({ default: 0 })
-  failedLoginAttempts: number;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  lockedUntil?: Date;
 
   @CreateDateColumn()
   createdAt: Date;

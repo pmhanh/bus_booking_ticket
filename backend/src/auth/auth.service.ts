@@ -109,7 +109,6 @@ export class AuthService {
         throw new UnauthorizedException('Token Google không hợp lệ');
       const user = await this.usersService.createFromProvider(payload.email, {
         fullName: payload.name,
-        avatarUrl: payload.picture,
         provider: 'google',
         verified: payload.email_verified ?? true,
       });

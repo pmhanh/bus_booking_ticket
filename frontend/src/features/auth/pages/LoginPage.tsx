@@ -51,7 +51,7 @@ export const LoginPage = () => {
 
     try {
       const loggedInUser = await login(form.email, form.password);
-      navigate(loggedInUser.role === 'admin' ? '/dashboard' : '/profile');
+      navigate(loggedInUser.role === 'admin' ? '/dashboard' : '/');
     } catch (err) {
       showMessage({
         type: 'error',

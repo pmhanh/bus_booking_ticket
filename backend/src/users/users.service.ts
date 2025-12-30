@@ -16,7 +16,7 @@ export class UsersService {
   findByEmail(email: string) {
     return this.repo.findOne({ 
       where: { email },
-      select: ['id', 'email', 'fullName', 'role', 'status', 'verified'] });
+      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'phone'] });
   }
 
   findByEmailWithPassword(email: string) {
@@ -30,6 +30,7 @@ export class UsersService {
         'status',
         'verified',
         'passwordHash',
+        'phone'
       ],
     });
   }
@@ -37,14 +38,21 @@ export class UsersService {
   findById(id: string) {
     return this.repo.findOne({ 
       where: { id },
-      select: ['id', 'email', 'fullName', 'role', 'status', 'verified'] 
+      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'phone'] 
+    });
+  }
+
+  findByIdWithPassword(id: string) {
+    return this.repo.findOne({
+      where: { id },
+      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'passwordHash', 'phone'],
     });
   }
 
   findByIdWithRefreshToken(id: string) {
     return this.repo.findOne({
       where: { id },
-      select: ['id', 'email', 'role', 'refreshTokenHash'],
+      select: ['id', 'email', 'role', 'refreshTokenHash', 'phone'],
     });
   }
 
@@ -62,7 +70,11 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    await this.repo.update(userId, { ...dto });
+    console.log('dto=', dto);
+    //await this.repo.update(userId, { ...dto });
+    //return this.findById(userId);
+    const result = await this.repo.update(userId, { ...dto });
+    console.log('affected=', result.affected);
     return this.findById(userId);
   }
 

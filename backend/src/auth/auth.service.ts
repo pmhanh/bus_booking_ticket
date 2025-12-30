@@ -257,14 +257,23 @@ export class AuthService {
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {
-    const user = await this.usersService.findById(userId);
-    if (!user || !user.passwordHash) throw new UnauthorizedException();
+    const user = await this.usersService.findByIdWithPassword(userId);
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    if (!user.passwordHash) {
+      throw new BadRequestException('Tài khoản không hỗ trợ đổi mật khẩu.');
+    }
+    
     const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
-    if (!valid) throw new UnauthorizedException('Mật khẩu hiện tại không đúng');
+    if (!valid) throw new BadRequestException('Mật khẩu hiện tại không đúng');
+    
     if (dto.newPassword === dto.currentPassword)
       throw new BadRequestException('Mật khẩu mới phải khác mật khẩu hiện tại');
+    
     await this.usersService.clearRefreshToken(user.id);
     await this.usersService.updatePassword(user.id, dto.newPassword);
     return { ok: true };
-  }
+  } 
 }

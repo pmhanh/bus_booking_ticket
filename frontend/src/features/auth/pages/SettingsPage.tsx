@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '../../../shared/components/ui/Button';
 import { Card } from '../../../shared/components/ui/Card';
 import { FormField } from '../../../shared/components/ui/FormField';
@@ -8,32 +8,100 @@ import { useToast } from '../../../shared/providers/ToastProvider';
 import { usePasswordValidation } from '../hooks/usePasswordValidation';
 import { apiClient } from '../../../shared/api/api';
 
+type PasswordForm = {
+  current: string;
+  next: string;
+  confirm: string;
+};
+
+type FieldErrors = {
+  current?: string;
+  next?: string;
+  confirm?: string;
+};
+
 export const SettingsPage = () => {
   const { accessToken } = useAuth();
   const { showMessage } = useToast();
   const { validatePassword, validateConfirm } = usePasswordValidation();
-  const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
-  const [fieldErrors, setFieldErrors] = useState<{ current?: string; next?: string; confirm?: string }>({});
+
+  const [pw, setPw] = useState<PasswordForm>({
+    current: '',
+    next: '',
+    confirm: '',
+  });
+
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [saving, setSaving] = useState(false);
+
+  // ✅ Client-side validation
+  const validate = (next: PasswordForm): FieldErrors => {
+    const errors: FieldErrors = {};
+
+    if (!next.current.trim()) {
+      errors.current = 'Nhập mật khẩu hiện tại';
+    }
+
+    const pwdErr = validatePassword(next.next);
+    if (pwdErr) {
+      errors.next = pwdErr;
+    }
+
+    const confirmErr = validateConfirm(next.next, next.confirm);
+    if (confirmErr) {
+      errors.confirm = confirmErr;
+    }
+
+    return errors;
+  };
+
+  const isValid = useMemo(() => Object.keys(validate(pw)).length === 0, [pw]);
 
   const changePassword = async (e: FormEvent) => {
     e.preventDefault();
-    const nextErrors: { current?: string; next?: string; confirm?: string } = {};
-    if (!pw.current.trim()) nextErrors.current = 'Nhập mật khẩu hiện tại';
-    const pwdErr = validatePassword(pw.next);
-    if (pwdErr) nextErrors.next = pwdErr;
-    const confirmErr = validateConfirm(pw.next, pw.confirm);
-    if (confirmErr) nextErrors.confirm = confirmErr;
-    setFieldErrors(nextErrors);
-    if (Object.keys(nextErrors).length) return;
-    if (!accessToken) return;
+    if (!accessToken) {
+      showMessage({
+        type: 'error',
+        title: 'Chưa đăng nhập',
+        message: 'Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại.',
+      });
+      return;
+    }
 
-    await apiClient('/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ currentPassword: pw.current, newPassword: pw.next }),
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    showMessage({ type: 'success', title: 'Đổi mật khẩu', message: 'Mật khẩu đã được cập nhật.' });
-    setPw({ current: '', next: '', confirm: '' });
+    const errors = validate(pw);
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
+
+    try {
+      setSaving(true);
+
+      await apiClient('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword: pw.current,
+          newPassword: pw.next,
+        }),
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      showMessage({
+        type: 'success',
+        title: 'Đổi mật khẩu thành công',
+        message: 'Mật khẩu của bạn đã được cập nhật.',
+      });
+
+      setPw({ current: '', next: '', confirm: '' });
+      setFieldErrors({});
+    } catch (err) {
+      const msg =
+        (err as any)?.response?.data?.message ||
+        (err as any)?.message ||
+        'Đổi mật khẩu thất bại, vui lòng thử lại';
+
+      showMessage({ type: 'error', title: 'Lỗi', message: msg });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -43,40 +111,68 @@ export const SettingsPage = () => {
           <FormField
             label="Mật khẩu hiện tại"
             type="password"
+            required
             value={pw.current}
             onChange={(e) => {
-              setPw({ ...pw, current: e.target.value });
-              if (fieldErrors.current) setFieldErrors((prev) => ({ ...prev, current: undefined }));
+              const current = e.target.value;
+              const next = { ...pw, current };
+              setPw(next);
+
+              const errors = validate(next);
+              setFieldErrors((prev) => ({ ...prev, current: errors.current }));
             }}
-            required
+            onBlur={() => {
+              const errors = validate(pw);
+              setFieldErrors((prev) => ({ ...prev, current: errors.current }));
+            }}
             error={fieldErrors.current}
           />
+
           <FormField
             label="Mật khẩu mới"
             type="password"
-            value={pw.next}
-            minLength={8}
-            onChange={(e) => {
-              setPw({ ...pw, next: e.target.value });
-              if (fieldErrors.next) setFieldErrors((prev) => ({ ...prev, next: undefined }));
-            }}
             required
+            minLength={8}
+            value={pw.next}
+            onChange={(e) => {
+              const nextPassword = e.target.value;
+              const next = { ...pw, next: nextPassword };
+              setPw(next);
+
+              const errors = validate(next);
+              setFieldErrors((prev) => ({ ...prev, next: errors.next }));
+            }}
+            onBlur={() => {
+              const errors = validate(pw);
+              setFieldErrors((prev) => ({ ...prev, next: errors.next }));
+            }}
             error={fieldErrors.next}
+            placeholder="Tối thiểu 8 ký tự, có chữ hoa, thường và số"
           />
+
           <FormField
             label="Xác nhận mật khẩu mới"
             type="password"
-            value={pw.confirm}
-            minLength={8}
-            onChange={(e) => {
-              setPw({ ...pw, confirm: e.target.value });
-              if (fieldErrors.confirm) setFieldErrors((prev) => ({ ...prev, confirm: undefined }));
-            }}
             required
+            minLength={8}
+            value={pw.confirm}
+            onChange={(e) => {
+              const confirm = e.target.value;
+              const next = { ...pw, confirm };
+              setPw(next);
+
+              const errors = validate(next);
+              setFieldErrors((prev) => ({ ...prev, confirm: errors.confirm }));
+            }}
+            onBlur={() => {
+              const errors = validate(pw);
+              setFieldErrors((prev) => ({ ...prev, confirm: errors.confirm }));
+            }}
             error={fieldErrors.confirm}
           />
-          <Button type="submit" className="w-full">
-            Cập nhật mật khẩu
+
+          <Button type="submit" className="w-full" disabled={!isValid || saving}>
+            {saving ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
           </Button>
         </form>
       </Card>

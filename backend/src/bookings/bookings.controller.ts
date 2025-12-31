@@ -28,8 +28,8 @@ export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
   @Get('trips/:tripId/seats')
-  seatStatus(@Param('tripId', ParseIntPipe) tripId: number, @Query('lockToken') lockToken?: string) {
-    return this.bookingsService.getSeatStatus(tripId, lockToken);
+  seatStatus(@Param('tripId', ParseIntPipe) tripId: number) {
+    return this.bookingsService.getSeatStatus(tripId);
   }
 
   @UseGuards(OptionalJwtAuthGuard)

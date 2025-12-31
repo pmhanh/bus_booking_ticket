@@ -1,4 +1,6 @@
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsIn, IsOptional, IsString } from 'class-validator';
+import { BusType } from '../bus.entity';
+import { Column } from 'typeorm/browser/decorator/columns/Column.js';
 
 export class UpdateBusDto {
   @IsOptional()
@@ -10,8 +12,8 @@ export class UpdateBusDto {
   plateNumber?: string;
 
   @IsOptional()
-  @IsString()
-  busType?: string;
+  @IsIn(Object.values(BusType))
+  busType?: BusType;
 
   @IsOptional()
   @IsArray()

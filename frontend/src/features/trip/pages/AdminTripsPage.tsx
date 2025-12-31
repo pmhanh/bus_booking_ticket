@@ -19,6 +19,15 @@ type TripForm = {
   basePrice: number | '';
 };
 
+const optionTextStyle: React.CSSProperties = { color: '#111' };
+const placeholderOptionStyle: React.CSSProperties = { color: '#666' };
+
+const parseSelectNumber = (value: string): number | '' => {
+  if (value === '') return '';
+  const n = Number(value);
+  return Number.isFinite(n) ? n : '';
+};
+
 export const AdminTripsPage = () => {
   const { accessToken } = useAuth();
   const [routes, setRoutes] = useState<Route[]>([]);
@@ -35,6 +44,7 @@ export const AdminTripsPage = () => {
     arrivalTime: '',
     basePrice: '',
   });
+
   const [filters, setFilters] = useState<{
     routeId?: number | '';
     busId?: number | '';
@@ -43,6 +53,7 @@ export const AdminTripsPage = () => {
     originCityId?: number | '';
     destinationCityId?: number | '';
   }>({});
+
   const [apiMessage, setApiMessage] = useState('');
   const [busMessage, setBusMessage] = useState('');
   const [busForm, setBusForm] = useState<{
@@ -56,6 +67,7 @@ export const AdminTripsPage = () => {
     busType: 'STANDARD',
     seatMapId: '',
   });
+
   const routesRef = useRef<Route[]>([]);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
@@ -68,15 +80,20 @@ export const AdminTripsPage = () => {
       if (filters.busId) params.append('busId', String(filters.busId));
       if (filters.fromDate) params.append('fromDate', filters.fromDate);
       if (filters.toDate) params.append('toDate', filters.toDate);
+
       try {
         const res = await apiClient<Trip[]>(`/admin/trips?${params.toString()}`, { headers });
+
         const filtered = res.filter((t) => {
           if (filters.originCityId && t.route.originCity.id !== filters.originCityId) return false;
-          if (filters.destinationCityId && t.route.destinationCity.id !== filters.destinationCityId) return false;
+          if (filters.destinationCityId && t.route.destinationCity.id !== filters.destinationCityId)
+            return false;
           return true;
         });
+
         const routeList = availableRoutes ?? routesRef.current;
         const map = new Map(routeList.map((r) => [r.id, r]));
+
         setTrips(
           filtered.map((t) => ({
             ...t,
@@ -137,10 +154,12 @@ export const AdminTripsPage = () => {
   const submitTrip = async () => {
     setError('');
     setApiMessage('');
+
     if (!form.routeId || !form.busId || !form.departureTime || !form.arrivalTime || !form.basePrice) {
       setError('Vui lòng nhập đủ thông tin chuyến.');
       return;
     }
+
     const payload = {
       routeId: Number(form.routeId),
       busId: Number(form.busId),
@@ -148,6 +167,7 @@ export const AdminTripsPage = () => {
       arrivalTime: form.arrivalTime,
       basePrice: Number(form.basePrice),
     };
+
     try {
       if (form.id) {
         await apiClient(`/admin/trips/${form.id}`, {
@@ -193,16 +213,19 @@ export const AdminTripsPage = () => {
 
   const submitBus = async () => {
     setBusMessage('');
+
     if (!busForm.name || !busForm.plateNumber) {
       setBusMessage('Vui lòng nhập tên xe và biển số.');
       return;
     }
+
     const payload = {
       name: busForm.name,
       plateNumber: busForm.plateNumber,
       busType: busForm.busType,
       seatMapId: busForm.seatMapId ? Number(busForm.seatMapId) : undefined,
     };
+
     try {
       const bus = await apiClient<Bus>('/admin/buses', {
         method: 'POST',
@@ -237,36 +260,53 @@ export const AdminTripsPage = () => {
             value={busForm.plateNumber}
             onChange={(e) => setBusForm({ ...busForm, plateNumber: e.target.value })}
           />
+
           <label className="block text-sm text-gray-200">
             <div className="mb-1 font-medium">Loại xe</div>
             <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={busForm.busType}
               onChange={(e) => setBusForm({ ...busForm, busType: e.target.value })}
             >
-              <option value="STANDARD">STANDARD</option>
-              <option value="SLEEPER">SLEEPER</option>
-              <option value="LIMOUSINE">LIMOUSINE</option>
-              <option value="MINIBUS">MINIBUS</option>
+              <option value="STANDARD" style={optionTextStyle}>
+                STANDARD
+              </option>
+              <option value="SLEEPER" style={optionTextStyle}>
+                SLEEPER
+              </option>
+              <option value="LIMOUSINE" style={optionTextStyle}>
+                LIMOUSINE
+              </option>
+              <option value="MINIBUS" style={optionTextStyle}>
+                MINIBUS
+              </option>
             </select>
           </label>
+
           <label className="block text-sm text-gray-200">
             <div className="mb-1 font-medium">Sơ đồ ghế</div>
             <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
-              value={busForm.seatMapId ?? ''}
-              onChange={(e) => setBusForm({ ...busForm, seatMapId: e.target.value ? Number(e.target.value) : '' })}
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={busForm.seatMapId === '' ? '' : String(busForm.seatMapId ?? '')}
+              onChange={(e) => {
+                const value = parseSelectNumber(e.target.value);
+                setBusForm({ ...busForm, seatMapId: value });
+              }}
             >
-              <option value="">Chưa gán</option>
+              <option value="" style={placeholderOptionStyle}>
+                Chưa gán
+              </option>
               {seatMaps.map((m) => (
-                <option key={m.id} value={m.id}>
+                <option key={m.id} value={String(m.id)} style={optionTextStyle}>
                   {m.name} ({m.rows}x{m.cols})
                 </option>
               ))}
             </select>
           </label>
         </div>
+
         {busMessage ? <div className="text-sm text-error mt-2">{busMessage}</div> : null}
+
         <div className="mt-3 flex gap-2">
           <Button onClick={submitBus}>Tạo xe</Button>
           <Button variant="secondary" onClick={resetBusForm}>
@@ -280,39 +320,50 @@ export const AdminTripsPage = () => {
           <label className="block text-sm text-gray-200">
             <div className="mb-1 font-medium">Tuyến</div>
             <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
-              value={form.routeId}
-              onChange={(e) => setForm({ ...form, routeId: Number(e.target.value) })}
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={form.routeId === '' ? '' : String(form.routeId)}
+              onChange={(e) => setForm({ ...form, routeId: parseSelectNumber(e.target.value) })}
             >
-              <option value="">Chọn tuyến</option>
+              <option value="" style={placeholderOptionStyle}>
+                Chọn tuyến
+              </option>
               {routes.map((r) => (
-                <option key={r.id} value={r.id}>
+                <option key={r.id} value={String(r.id)} style={optionTextStyle}>
                   {r.name}
                 </option>
               ))}
             </select>
           </label>
+
           <label className="block text-sm text-gray-200">
             <div className="mb-1 font-medium">Xe</div>
             <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
-              value={form.busId}
-              onChange={(e) => setForm({ ...form, busId: Number(e.target.value) })}
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={form.busId === '' ? '' : String(form.busId)}
+              onChange={(e) => setForm({ ...form, busId: parseSelectNumber(e.target.value) })}
             >
-              <option value="">Chọn xe</option>
+              <option value="" style={placeholderOptionStyle}>
+                Chọn xe
+              </option>
               {buses.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.plateNumber}){b.seatMap ? ` - ${b.seatMap.name}` : ''}
+                <option key={b.id} value={String(b.id)} style={optionTextStyle}>
+                  {b.name} ({b.plateNumber})
+                  {b.seatMap ? ` - ${b.seatMap.name}` : ''}
                 </option>
               ))}
             </select>
           </label>
+
           <FormField
             label="Giá cơ bản"
             type="number"
             value={form.basePrice}
-            onChange={(e) => setForm({ ...form, basePrice: Number(e.target.value) || '' })}
+            onChange={(e) => {
+              const v = e.target.value;
+              setForm({ ...form, basePrice: v === '' ? '' : Number(v) });
+            }}
           />
+
           <FormField
             label="Giờ đi"
             type="datetime-local"
@@ -326,12 +377,14 @@ export const AdminTripsPage = () => {
             onChange={(e) => setForm({ ...form, arrivalTime: e.target.value })}
           />
         </div>
+
         {error ? <div className="text-error text-sm mt-2">{error}</div> : null}
         {apiMessage ? (
           <div className="mt-2 rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
             {apiMessage}
           </div>
         ) : null}
+
         <div className="mt-4 flex gap-2">
           <Button onClick={submitTrip}>{form.id ? 'Lưu' : 'Tạo chuyến'}</Button>
           {form.id ? (
@@ -347,33 +400,39 @@ export const AdminTripsPage = () => {
           <label className="block text-sm text-gray-200">
             <div className="mb-1 font-medium">Tuyến</div>
             <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
-              value={filters.routeId ?? ''}
-              onChange={(e) => setFilters((f) => ({ ...f, routeId: e.target.value ? Number(e.target.value) : '' }))}
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={filters.routeId === '' || filters.routeId == null ? '' : String(filters.routeId)}
+              onChange={(e) => setFilters((f) => ({ ...f, routeId: parseSelectNumber(e.target.value) }))}
             >
-              <option value="">Tất cả</option>
+              <option value="" style={placeholderOptionStyle}>
+                Tất cả
+              </option>
               {routes.map((r) => (
-                <option key={r.id} value={r.id}>
+                <option key={r.id} value={String(r.id)} style={optionTextStyle}>
                   {r.name}
                 </option>
               ))}
             </select>
           </label>
+
           <label className="block text-sm text-gray-200">
             <div className="mb-1 font-medium">Xe</div>
             <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
-              value={filters.busId ?? ''}
-              onChange={(e) => setFilters((f) => ({ ...f, busId: e.target.value ? Number(e.target.value) : '' }))}
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={filters.busId === '' || filters.busId == null ? '' : String(filters.busId)}
+              onChange={(e) => setFilters((f) => ({ ...f, busId: parseSelectNumber(e.target.value) }))}
             >
-              <option value="">Tất cả</option>
+              <option value="" style={placeholderOptionStyle}>
+                Tất cả
+              </option>
               {buses.map((b) => (
-                <option key={b.id} value={b.id}>
+                <option key={b.id} value={String(b.id)} style={optionTextStyle}>
                   {b.name}
                 </option>
               ))}
             </select>
           </label>
+
           <FormField
             label="Từ ngày"
             type="date"
@@ -386,41 +445,45 @@ export const AdminTripsPage = () => {
             value={filters.toDate ?? ''}
             onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
           />
+
           <label className="block text-sm text-gray-200">
             <div className="mb-1 font-medium">Điểm đi</div>
             <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
-              value={filters.originCityId ?? ''}
-              onChange={(e) =>
-                setFilters((f) => ({
-                  ...f,
-                  originCityId: e.target.value ? Number(e.target.value) : '',
-                }))
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={
+                filters.originCityId === '' || filters.originCityId == null ? '' : String(filters.originCityId)
               }
+              onChange={(e) => setFilters((f) => ({ ...f, originCityId: parseSelectNumber(e.target.value) }))}
             >
-              <option value="">Tất cả</option>
+              <option value="" style={placeholderOptionStyle}>
+                Tất cả
+              </option>
               {cities.map((c) => (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={String(c.id)} style={optionTextStyle}>
                   {c.name}
                 </option>
               ))}
             </select>
           </label>
+
           <label className="block text-sm text-gray-200">
             <div className="mb-1 font-medium">Điểm đến</div>
             <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
-              value={filters.destinationCityId ?? ''}
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={
+                filters.destinationCityId === '' || filters.destinationCityId == null
+                  ? ''
+                  : String(filters.destinationCityId)
+              }
               onChange={(e) =>
-                setFilters((f) => ({
-                  ...f,
-                  destinationCityId: e.target.value ? Number(e.target.value) : '',
-                }))
+                setFilters((f) => ({ ...f, destinationCityId: parseSelectNumber(e.target.value) }))
               }
             >
-              <option value="">Tất cả</option>
+              <option value="" style={placeholderOptionStyle}>
+                Tất cả
+              </option>
               {cities.map((c) => (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={String(c.id)} style={optionTextStyle}>
                   {c.name}
                 </option>
               ))}

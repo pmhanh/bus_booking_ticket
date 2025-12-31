@@ -10,7 +10,6 @@ export const HomePage = () => {
 
   return (
     <div className="relative bg-[#0b1021] pb-20">
-      {/* Background blobs */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute -left-16 -top-16 h-64 w-64 bg-emerald-500/10 blur-3xl" />
         <div className="absolute right-0 top-0 h-72 w-72 bg-blue-500/10 blur-3xl" />
@@ -18,7 +17,6 @@ export const HomePage = () => {
       </div>
 
       <div className="relative max-w-6xl mx-auto space-y-10">
-        {/* TITLE */}
         <div className="text-center max-w-3xl mx-auto">
           <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight">
             Đặt vé xe nhanh chóng, <span className="text-emerald-400">khởi hành bất cứ đâu.</span>
@@ -28,7 +26,6 @@ export const HomePage = () => {
           </p>
         </div>
 
-        {/* SEARCH BOX TO, Ở TRÊN CÙNG */}
         <div className="w-full flex justify-center">
           <div
             className="
@@ -50,7 +47,6 @@ export const HomePage = () => {
           </div>
         </div>
 
-        {/* TRUST METRICS 24/7 – 4.8 – % */}
         <div className="flex flex-wrap justify-center gap-6 text-xs md:text-sm">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-300 text-xs font-semibold">
@@ -83,9 +79,7 @@ export const HomePage = () => {
           </div>
         </div>
 
-        {/* BLOCK "CHUYẾN TIẾP THEO" + TUYẾN ĐƯỜNG GẦN ĐÂY */}
         <section className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] items-stretch">
-          {/* Card chuyến tiếp theo */}
           <div className="rounded-3xl bg-gradient-to-br from-emerald-500/25 via-sky-500/20 to-blue-600/25 border border-white/10 p-5 md:p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -153,7 +147,6 @@ export const HomePage = () => {
             </div>
           </div>
 
-          {/* TUYẾN ĐƯỜNG ĐÃ TÌM GẦN ĐÂY */}
           <div className="h-full">
             <div className="h-full rounded-3xl bg-white/5 border border-white/10 px-5 py-5 flex flex-col">
               <div className="space-y-3 mb-3">
@@ -194,7 +187,6 @@ export const HomePage = () => {
           </div>
         </section>
 
-        {/* TUYẾN ĐƯỜNG PHỔ BIẾN */}
         <section className="mt-10">
           <h2 className="text-lg md:text-xl font-semibold text-white mb-3">
             Tuyến đường phổ biến

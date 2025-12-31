@@ -9,12 +9,10 @@ export type CreateBookingPayload = {
   seats: string[];
   passengers?: PassengerInput[];
   lockToken?: string;
-  guestSessionId?: string;
 };
 
-export async function getSeatStatus(tripId: number, lockToken?: string) {
-  const qs = lockToken ? `?lockToken=${encodeURIComponent(lockToken)}` : '';
-  return apiClient<SeatStatusResponse>(`/bookings/trips/${tripId}/seats${qs}`, { method: 'GET' });
+export async function getSeatStatus(tripId: number) {
+  return apiClient<SeatStatusResponse>(`/bookings/trips/${tripId}/seats`, { method: 'GET' });
 }
 
 export async function createBooking(payload: CreateBookingPayload, token?: string | null) {

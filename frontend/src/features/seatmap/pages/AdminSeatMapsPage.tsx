@@ -11,7 +11,6 @@ type SeatCell = {
   col: number;
   isSeat: boolean;
   code?: string;
-  price?: number;
   seatType?: string;
 };
 
@@ -30,7 +29,6 @@ export const AdminSeatMapsPage = () => {
   const [name, setName] = useState('');
   const [rows, setRows] = useState(4);
   const [cols, setCols] = useState(4);
-  const [basePrice, setBasePrice] = useState(100000);
   const [cells, setCells] = useState<SeatCell[]>([]);
   const [selectedCell, setSelectedCell] = useState<SeatCell | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -45,7 +43,6 @@ export const AdminSeatMapsPage = () => {
       seats?.forEach((s) =>
         lookup.set(`${s.row}-${s.col}`, {
           code: s.code,
-          price: s.price,
           isActive: s.isActive,
           seatType: s.seatType || 'standard',
         }),
@@ -58,16 +55,15 @@ export const AdminSeatMapsPage = () => {
           next.push({
             row: i,
             col: j,
-            isSeat: !!found,
+            isSeat: found ? found.isActive !== false : true,
             code: found?.code ?? `${i}${colLetter(j)}`,
-            price: found?.price ?? basePrice,
             seatType: found?.seatType ?? 'standard',
           });
         }
       }
       setCells(next);
     },
-    [basePrice],
+    [],
   );
 
   const loadSeatMaps = useCallback(
@@ -102,7 +98,6 @@ export const AdminSeatMapsPage = () => {
               code: s.code || `${s.row}${colLetter(s.col)}`,
               row: s.row,
               col: s.col,
-              price: s.price || basePrice,
               seatType: s.seatType || 'standard',
               isActive: true,
             })) as SeatMap['seats']
@@ -114,7 +109,6 @@ export const AdminSeatMapsPage = () => {
       seats?.forEach((s) =>
         lookup.set(`${s.row}-${s.col}`, {
           code: s.code,
-          price: s.price,
           isActive: s.isActive,
           seatType: s.seatType || 'standard',
         }),
@@ -127,16 +121,15 @@ export const AdminSeatMapsPage = () => {
           next.push({
             row: i,
             col: j,
-            isSeat: !!found,
+            isSeat: found ? found.isActive !== false : true,
             code: found?.code ?? `${i}${colLetter(j)}`,
-            price: found?.price ?? basePrice,
             seatType: found?.seatType ?? 'standard',
           });
         }
       }
       return next;
     });
-  }, [rows, cols, selectedId, basePrice]);
+  }, [rows, cols, selectedId]);
 
   const toggleCell = (cell: SeatCell) => {
     let nextSelected: SeatCell | null = null;
@@ -148,7 +141,6 @@ export const AdminSeatMapsPage = () => {
             ...c,
             isSeat,
             code: isSeat ? c.code || `${c.row}${colLetter(c.col)}` : undefined,
-            price: isSeat ? c.price ?? basePrice : undefined,
             seatType: isSeat ? c.seatType || 'standard' : undefined,
           };
           nextSelected = isSeat ? updated : null;
@@ -158,18 +150,6 @@ export const AdminSeatMapsPage = () => {
       }),
     );
     setSelectedCell(nextSelected);
-  };
-
-  const updateSelectedPrice = (price: number) => {
-    setCells((prev) =>
-      prev.map((c) => {
-        if (selectedCell && c.row === selectedCell.row && c.col === selectedCell.col) {
-          return { ...c, price };
-        }
-        return c;
-      }),
-    );
-    setSelectedCell((prev) => (prev ? { ...prev, price } : prev));
   };
 
   const updateSelectedSeatType = (seatType: string) => {
@@ -192,7 +172,6 @@ export const AdminSeatMapsPage = () => {
         code: c.code || `${c.row}${colLetter(c.col)}`,
         row: c.row,
         col: c.col,
-        price: c.price ?? basePrice,
         seatType: c.seatType || 'standard',
         isActive: true,
       }));
@@ -258,12 +237,6 @@ export const AdminSeatMapsPage = () => {
           <div className="grid md:grid-cols-2 gap-3">
             <FormField label="Tên sơ đồ" value={name} onChange={(e) => setName(e.target.value)} />
             <FormField
-              label="Giá mặc định"
-              type="number"
-              value={basePrice}
-              onChange={(e) => setBasePrice(Number(e.target.value) || 0)}
-            />
-            <FormField
               label="Số hàng"
               type="number"
               value={rows}
@@ -292,20 +265,11 @@ export const AdminSeatMapsPage = () => {
             ))}
           </div>
           {selectedCell ? (
-            <div className="mt-3 grid sm:grid-cols-[1fr_1fr_1fr] gap-3 items-end">
+            <div className="mt-3 grid sm:grid-cols-[1fr_1fr] gap-3 items-end">
               <div className="text-sm text-gray-200">
                 Ghế {selectedCell.row}
                 {colLetter(selectedCell.col)}
               </div>
-              <FormField
-                label="Giá ghế"
-                type="number"
-                value={
-                  cells.find((c) => c.row === selectedCell.row && c.col === selectedCell.col)?.price ??
-                  basePrice
-                }
-                onChange={(e) => updateSelectedPrice(Number(e.target.value) || 0)}
-              />
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-gray-400">Loại ghế</label>
                 <select
@@ -325,7 +289,7 @@ export const AdminSeatMapsPage = () => {
               </div>
             </div>
           ) : (
-            <div className="mt-3 text-sm text-gray-400">Chọn 1 ghế để chỉnh giá.</div>
+            <div className="mt-3 text-sm text-gray-400">Chọn 1 ghế để chỉnh loại ghế.</div>
           )}
           </div>
 

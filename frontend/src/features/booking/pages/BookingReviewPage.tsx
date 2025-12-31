@@ -5,28 +5,21 @@ import { Button } from '../../../shared/components/ui/Button';
 import { useBooking } from '../context/BookingContext';
 import { useAuth } from '../../auth/context/AuthContext';
 import { createBooking } from '../api/bookings';
-import { refreshSeatLock } from '../api/seats';
 
 export const BookingReviewPage = () => {
   const navigate = useNavigate();
-  const { trip, passengers, contact, totalPrice, clear, lockInfo } = useBooking();
+  const { trip, passengers, contact, totalPrice, clear, hold } = useBooking();
   const { accessToken } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [guestSessionId] = useState(() => {
-    const key = 'guest_session_id';
-    const existing = localStorage.getItem(key);
-    if (existing) return existing;
-    const id = crypto.randomUUID();
-    localStorage.setItem(key, id);
-    return id;
-  });
 
   useEffect(() => {
     if (!trip || passengers.length === 0) {
       navigate('/search');
+    } else if (!hold) {
+      navigate(`/trips/${trip.id}/select-seats`);
     }
-  }, [trip, passengers.length, navigate]);
+  }, [hold, navigate, passengers.length, trip]);
 
   const payload = useMemo(() => {
     if (!trip) return null;
@@ -36,47 +29,35 @@ export const BookingReviewPage = () => {
       contactEmail: contact.email,
       contactPhone: contact.phone,
       seats: passengers.map((p) => p.seatCode).filter(Boolean) as string[],
+      lockToken: hold?.lockToken,
       passengers: passengers.map((p) => ({
         seatCode: p.seatCode,
         name: p.name,
         phone: p.phone,
         idNumber: p.idNumber,
       })),
-      lockToken: lockInfo?.token,
-      guestSessionId,
     };
-  }, [contact.email, contact.name, contact.phone, passengers, trip, lockInfo?.token, guestSessionId]);
+  }, [contact.email, contact.name, contact.phone, hold?.lockToken, passengers, trip]);
 
   const confirmBooking = async () => {
     if (!payload) return;
-    if (!payload.lockToken) {
-      setError('Vui long giu ghe truoc khi dat ve.');
-      return;
-    }
     if (!payload.contactPhone) {
       setError('Vui lòng nhập số điện thoại liên hệ');
+      return;
+    }
+    if (!hold?.lockToken) {
+      setError('Bạn cần giữ ghế trước khi tạo booking.');
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      await refreshSeatLock(
-        payload.tripId,
-        payload.lockToken,
-        accessToken || undefined,
-        Number((import.meta.env.VITE_SEAT_HOLD_MINUTES as string | undefined) || 10) || 10,
-        payload.guestSessionId,
-      );
       const booking = await createBooking(payload, accessToken);
       clear();
       navigate(`/bookings/${booking.id}/ticket`, { state: { booking } });
     } catch (err) {
       const message = (err as Error)?.message || 'Không thể tạo đặt chỗ.';
-      if (message.toLowerCase().includes('lock')) {
-        setError('Phiên giữ ghế hết hạn, vui lòng quay lại chọn ghế và giữ ghế lại.');
-      } else {
-        setError(message);
-      }
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -138,13 +119,12 @@ export const BookingReviewPage = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-400">Email</span>
-              <span className="text-white">{contact.email || '—'}</span>
+              <span className="text-white">{contact.email || '-'}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-400">Số điện thoại</span>
               <span className="text-white">{contact.phone}</span>
             </div>
-            
           </div>
         </Card>
       </div>
@@ -158,10 +138,10 @@ export const BookingReviewPage = () => {
             >
               <div className="space-y-1">
                 <div className="text-white font-semibold">
-                  Ghế {p.seatCode} · {p.name || 'Chưa nhập tên'}
+                  Ghế {p.seatCode} – {p.name || 'Chưa nhập tên'}
                 </div>
                 <div className="text-xs text-gray-400">
-                  SĐT: {p.phone || '—'} · ID: {p.idNumber || '—'}
+                  SĐT: {p.phone || '-'} – ID: {p.idNumber || '-'}
                 </div>
               </div>
               <div className="text-white font-semibold">{(p.price ?? trip.basePrice).toLocaleString()} đ</div>

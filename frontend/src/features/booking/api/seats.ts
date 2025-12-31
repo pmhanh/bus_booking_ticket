@@ -1,56 +1,37 @@
 import { apiClient } from '../../../shared/api/api';
 import type { SeatAvailability } from '../../seatmap/types/seatMap';
 
-export type SeatLockResponse = {
-  lockToken: string;
-  expiresAt: string;
-  seats: string[];
-  availability: SeatAvailability;
-};
+const STATUS_PATH = (tripId: number) => `/trips/${tripId}/seats/status`;
+const LEGACY_STATUS_PATH = (tripId: number) => `/trips/${tripId}/seat-map`;
+const HOLD_PATH = (tripId: number) => `/trips/${tripId}/seats/hold`;
+const RELEASE_PATH = (tripId: number) => `/trips/${tripId}/seats/release`;
 
-export function fetchSeatAvailability(tripId: number, lockToken?: string) {
-  const qs = lockToken ? `?lockToken=${lockToken}` : '';
-  return apiClient<SeatAvailability>(`/trips/${tripId}/seat-map${qs}`);
+export async function fetchSeatStatus(tripId: number) {
+  try {
+    return await apiClient<SeatAvailability>(STATUS_PATH(tripId));
+  } catch (err) {
+    // Fallback to legacy path if server hasn't been updated yet
+    return apiClient<SeatAvailability>(LEGACY_STATUS_PATH(tripId));
+  }
 }
 
-export function lockSeats(
+export function holdSeats(
   tripId: number,
-  params: { seats: string[]; holdMinutes?: number; lockToken?: string; guestSessionId?: string },
-  accessToken?: string,
+  seatCodes: string[],
+  ttlSeconds = 120,
 ) {
-  return apiClient<SeatLockResponse>(`/trips/${tripId}/seat-locks`, {
-    method: 'POST',
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-    body: JSON.stringify(params),
-  });
-}
-
-export function refreshSeatLock(
-  tripId: number,
-  lockToken: string,
-  accessToken?: string,
-  holdMinutes?: number,
-  guestSessionId?: string,
-) {
-  return apiClient<SeatLockResponse>(`/trips/${tripId}/seat-locks/${lockToken}`, {
-    method: 'PATCH',
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-    body: JSON.stringify({ holdMinutes, guestSessionId }),
-  });
-}
-
-export function releaseSeatLock(
-  tripId: number,
-  lockToken: string,
-  accessToken?: string,
-  guestSessionId?: string,
-) {
-  const qs = guestSessionId ? `?guestSessionId=${encodeURIComponent(guestSessionId)}` : '';
-  return apiClient<{ released: boolean; availability: SeatAvailability }>(
-    `/trips/${tripId}/seat-locks/${lockToken}${qs}`,
+  return apiClient<{ ok: boolean; seatCodes: string[]; lockToken: string; expiresAt: string }>(
+    HOLD_PATH(tripId),
     {
-      method: 'DELETE',
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      method: 'POST',
+      body: JSON.stringify({ seatCodes, ttlSeconds }),
     },
   );
+}
+
+export function releaseSeats(tripId: number, seatCodes: string[], lockToken: string) {
+  return apiClient<{ ok: boolean }>(RELEASE_PATH(tripId), {
+    method: 'POST',
+    body: JSON.stringify({ seatCodes, lockToken }),
+  });
 }

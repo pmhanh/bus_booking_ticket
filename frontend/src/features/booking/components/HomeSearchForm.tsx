@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../../shared/components/ui/Button';
 import { searchCities, type CityOption } from '../../route/api/cities';
@@ -16,73 +16,215 @@ type HomeSearchFormProps = {
   initialDate?: string;
 };
 
-type AutocompleteState = {
-  query: string;
-  options: CityOption[];
-  selected: CityOption | null;
-  open: boolean;
-  loading: boolean;
+function getTodayYYYYMMDD() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function useClickOutside(
+  refs: Array<React.RefObject<HTMLElement | null>>,
+  onOutside: () => void
+) {
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+
+      const isInside = refs.some((r) => r.current?.contains(target));
+      if (!isInside) onOutside();
+    };
+
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [refs, onOutside]);
+}
+
+type UseCityAutocompleteProps = {
+  initialValue?: CityOption | null;
+  limit?: number;
 };
 
-const useCityAutocomplete = () => {
-  const [state, setState] = useState<AutocompleteState>({
-    query: '',
-    options: [],
-    selected: null,
-    open: false,
-    loading: false,
-  });
+const useCityAutocomplete = ({ initialValue = null, limit = 10 }: UseCityAutocompleteProps = {}) => {
+  const [query, setQuery] = useState(initialValue?.name ?? '');
+  const [selected, setSelected] = useState<CityOption | null>(initialValue);
+  const [options, setOptions] = useState<CityOption[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!state.query) {
-      setState((prev) => ({ ...prev, options: [], open: false, loading: false }));
-      return;
-    }
-    const handle = setTimeout(async () => {
-      setState((prev) => ({ ...prev, loading: true, open: true }));
-      try {
-        const opts = await searchCities(state.query, 10);
-        setState((prev) => ({ ...prev, options: opts, loading: false, open: true }));
-      } catch {
-        setState((prev) => ({ ...prev, loading: false }));
-      }
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [state.query]);
+  // chống race condition (request cũ về sau không đè request mới)
+  const reqIdRef = useRef(0);
 
   const loadPopular = useCallback(async () => {
-    setState((prev) => ({ ...prev, loading: true, open: true }));
+    const myReqId = ++reqIdRef.current;
+    setLoading(true);
     try {
-      const opts = await searchCities('', 10);
-      setState((prev) => ({ ...prev, options: opts, loading: false, open: true }));
+      const result = await searchCities('', limit); // backend: '' => popular
+      if (reqIdRef.current !== myReqId) return;
+      setOptions(result);
     } catch {
-      setState((prev) => ({ ...prev, loading: false }));
+      if (reqIdRef.current !== myReqId) return;
+      setOptions([]);
+    } finally {
+      if (reqIdRef.current === myReqId) setLoading(false);
     }
-  }, []);
+  }, [limit]);
 
-  const select = (opt: CityOption) => {
-    setState((prev) => ({
-      ...prev,
-      selected: opt,
-      query: opt.name,
-      open: false,
-    }));
+  // Debounce search khi query có chữ và open = true
+  useEffect(() => {
+    if (!open) return;
+
+    const q = query.trim();
+    if (!q) return; // query rỗng => không search (sẽ load popular khi focus)
+
+    const myReqId = ++reqIdRef.current;
+    const handle = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const result = await searchCities(q, limit);
+        if (reqIdRef.current !== myReqId) return;
+        setOptions(result);
+      } catch {
+        if (reqIdRef.current !== myReqId) return;
+        setOptions([]);
+      } finally {
+        if (reqIdRef.current === myReqId) setLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(handle);
+  }, [query, open, limit]);
+
+  const onChange = (value: string) => {
+    setQuery(value);
+    setSelected(null); // user gõ lại => reset selected
+    setOpen(true);
   };
 
-  const setQuery = (q: string) => setState((prev) => ({ ...prev, query: q, open: true }));
+  const onFocus = () => {
+    setOpen(true);
+    if (!query.trim() && options.length === 0 && !loading) {
+      void loadPopular();
+    }
+  };
+
+  const onSelect = (opt: CityOption) => {
+    setQuery(opt.name);
+    setSelected(opt);
+    setOpen(false);
+  };
+
+  const close = () => setOpen(false);
+
+  const clear = () => {
+    setQuery('');
+    setSelected(null);
+    setOptions([]);
+    setOpen(false);
+    reqIdRef.current++; // invalidate request đang bay
+  };
+
+  const setInitial = (opt: CityOption | null) => {
+    setSelected(opt);
+    setQuery(opt?.name ?? '');
+  };
 
   return {
-    state,
-    setQuery,
-    select,
-    setOpen: (open: boolean) => {
-      setState((prev) => ({ ...prev, open }));
-      if (open && !state.query && !state.options.length) {
-        void loadPopular();
-      }
-    },
-    close: () => setState((prev) => ({ ...prev, open: false })),
+    query,
+    selected,
+    options,
+    open,
+    loading,
+    onChange,
+    onFocus,
+    onSelect,
+    close,
+    clear,
+    setInitial,
+    setOpen,
   };
+};
+
+type AutocompleteInputProps = {
+  label: string;
+  placeholder?: string;
+  value: string;
+  loading: boolean;
+  open: boolean;
+  options: CityOption[];
+  onChange: (v: string) => void;
+  onFocus: () => void;
+  onSelect: (opt: CityOption) => void;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  icon?: React.ReactNode;
+  hoverClassName?: string;
+  invalid?: boolean;
+};
+
+const AutocompleteInput = ({
+  label,
+  placeholder,
+  value,
+  loading,
+  open,
+  options,
+  onChange,
+  onFocus,
+  onSelect,
+  containerRef,
+  inputRef,
+  icon,
+  hoverClassName = 'hover:bg-emerald-500/20',
+  invalid = false,
+}: AutocompleteInputProps) => {
+  const showDropdown = open && (loading || options.length > 0);
+
+  return (
+    <div className="relative z-50" ref={containerRef}>
+      <label className="block text-sm font-medium text-gray-200 mb-1">{label}</label>
+
+      <div className="relative">
+        {icon ? (
+          <span className="absolute left-3 top-1/2 -translate-y-1/2">{icon}</span>
+        ) : null}
+
+        <input
+          ref={inputRef}
+          className={[
+            'w-full rounded-lg bg-black/40 border px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2',
+            icon ? 'pl-10' : 'pl-3',
+            invalid
+              ? 'border-red-500/60 focus:ring-red-400'
+              : 'border-white/10 focus:ring-emerald-400',
+          ].join(' ')}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={onFocus}
+          placeholder={placeholder}
+        />
+      </div>
+
+      {showDropdown && (
+        <div className="absolute left-0 right-0 z-50 mt-1 bg-slate-900/95 backdrop-blur border border-white/10 rounded-lg shadow-xl max-h-60 overflow-auto pr-1">
+          {loading ? <div className="px-3 py-2 text-sm text-gray-400">Đang tải...</div> : null}
+
+          {!loading && options.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-400">Không có kết quả</div>
+          ) : null}
+
+          {!loading &&
+            options.map((opt) => (
+              <div
+                key={opt.id}
+                className={`px-3 py-2 text-sm text-gray-100 ${hoverClassName} cursor-pointer`}
+                onClick={() => onSelect(opt)}
+              >
+                {opt.name}
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export const HomeSearchForm = ({
@@ -92,47 +234,37 @@ export const HomeSearchForm = ({
   initialDate,
 }: HomeSearchFormProps) => {
   const navigate = useNavigate();
+
   const origin = useCityAutocomplete();
   const destination = useCityAutocomplete();
+
   const [date, setDate] = useState(initialDate || '');
-  const [error, setError] = useState('');
+  const today = useMemo(() => getTodayYYYYMMDD(), []);
+
+  const [invalid, setInvalid] = useState({
+    origin: false,
+    destination: false,
+    date: false,
+  });
+
   const originRef = useRef<HTMLDivElement>(null);
   const destinationRef = useRef<HTMLDivElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    const originId = origin.state.selected?.id;
-    const destinationId = destination.state.selected?.id;
-    const originName = origin.state.selected?.name || '';
-    const destinationName = destination.state.selected?.name || '';
-    if (!originId || !destinationId || !date) {
-      setError('Vui lòng chọn điểm đi, điểm đến và ngày khởi hành.');
-      return;
-    }
-    if (onSubmit) {
-      onSubmit({ originId, destinationId, date, originName, destinationName });
-    } else {
-      navigate(`/search?originId=${originId}&destinationId=${destinationId}&date=${date}`);
-    }
-  };
+  const originInputRef = useRef<HTMLInputElement>(null);
+  const destinationInputRef = useRef<HTMLInputElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (target && !originRef.current?.contains(target)) origin.close();
-      if (target && !destinationRef.current?.contains(target)) destination.close();
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [origin, destination]);
+  useClickOutside([originRef, destinationRef], () => {
+    origin.close();
+    destination.close();
+  });
 
   useEffect(() => {
     if (initialOrigin) {
-      origin.select({ id: initialOrigin.id, name: initialOrigin.name, code: 0, slug: '' });
+      origin.setInitial({ id: initialOrigin.id, name: initialOrigin.name, code: 0, slug: '' });
     }
     if (initialDestination) {
-      destination.select({
+      destination.setInitial({
         id: initialDestination.id,
         name: initialDestination.name,
         code: 0,
@@ -143,13 +275,96 @@ export const HomeSearchForm = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialOrigin?.id, initialDestination?.id, initialDate]);
 
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      setInvalid({ origin: false, destination: false, date: false });
+
+      const o = origin.selected;
+      const d = destination.selected;
+
+      if (!o) {
+        setInvalid((p) => ({ ...p, origin: true }));
+        origin.setOpen(true);
+        originInputRef.current?.focus();
+        return;
+      }
+
+      if (!d) {
+        setInvalid((p) => ({ ...p, destination: true }));
+        destination.setOpen(true);
+        destinationInputRef.current?.focus();
+        return;
+      }
+
+      if (!date) {
+        setInvalid((p) => ({ ...p, date: true }));
+        dateInputRef.current?.focus();
+        if (typeof dateInputRef.current?.showPicker === 'function') {
+          dateInputRef.current.showPicker();
+        }
+        return;
+      }
+
+      if (o.id === d.id) {
+        setInvalid((p) => ({ ...p, destination: true }));
+        destination.setOpen(true);
+        destinationInputRef.current?.focus();
+        return;
+      }
+
+      if (date < today) {
+        setInvalid((p) => ({ ...p, date: true }));
+        dateInputRef.current?.focus();
+        if (typeof dateInputRef.current?.showPicker === 'function') {
+          dateInputRef.current.showPicker();
+        }
+        return;
+      }
+
+      if (onSubmit) {
+        onSubmit({
+          originId: o.id,
+          destinationId: d.id,
+          date,
+          originName: o.name,
+          destinationName: d.name,
+        });
+      } else {
+        navigate(`/search?originId=${o.id}&destinationId=${d.id}&date=${date}`);
+      }
+    },
+    [date, today, origin, destination, onSubmit, navigate]
+  );
+
   return (
     <form onSubmit={handleSubmit} className="relative z-50 space-y-4">
       <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
-        <div className="relative z-50" ref={originRef}>
-          <label className="block text-sm font-medium text-gray-200 mb-1">Điểm đi</label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-300">
+        <AutocompleteInput
+          label="Điểm đi"
+          placeholder="Thành phố xuất phát"
+          value={origin.query}
+          loading={origin.loading}
+          open={origin.open}
+          options={origin.options}
+          onChange={(v) => {
+            setInvalid((p) => ({ ...p, origin: false }));
+            origin.onChange(v);
+          }}
+          onFocus={() => {
+            setInvalid((p) => ({ ...p, origin: false }));
+            origin.onFocus();
+          }}
+          onSelect={(opt) => {
+            setInvalid((p) => ({ ...p, origin: false }));
+            origin.onSelect(opt);
+            destination.clear(); // UX: đổi điểm đi => reset điểm đến
+          }}
+          containerRef={originRef}
+          inputRef={originInputRef}
+          invalid={invalid.origin}
+          icon={
+            <span className="text-emerald-300">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-5 w-5"
@@ -158,37 +373,42 @@ export const HomeSearchForm = ({
                 stroke="currentColor"
                 strokeWidth={1.6}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 19l19-7-19-7 5 7-5 7z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M2.5 19l19-7-19-7 5 7-5 7z"
+                />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12h1.5" />
               </svg>
             </span>
-            <input
-              className="w-full pl-10 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-              value={origin.state.query}
-              onChange={(e) => origin.setQuery(e.target.value)}
-              onFocus={() => origin.setOpen(true)}
-              placeholder="Thành phố xuất phát"
-            />
-          </div>
-          {origin.state.open && origin.state.options.length > 0 && (
-            <div className="absolute left-0 right-0 z-50 mt-1 bg-slate-900/95 backdrop-blur border border-white/10 rounded-lg shadow-xl max-h-60 overflow-auto pr-1">
-              {origin.state.options.map((opt) => (
-                <div
-                  key={opt.id}
-                  className="px-3 py-2 text-sm text-gray-100 hover:bg-emerald-500/20 cursor-pointer"
-                  onClick={() => origin.select(opt)}
-                >
-                  {opt.name}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          }
+          hoverClassName="hover:bg-emerald-500/20"
+        />
 
-        <div className="relative z-50" ref={destinationRef}>
-          <label className="block text-sm font-medium text-gray-200 mb-1">Điểm đến</label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-300">
+        <AutocompleteInput
+          label="Điểm đến"
+          placeholder="Thành phố muốn đến"
+          value={destination.query}
+          loading={destination.loading}
+          open={destination.open}
+          options={destination.options}
+          onChange={(v) => {
+            setInvalid((p) => ({ ...p, destination: false }));
+            destination.onChange(v);
+          }}
+          onFocus={() => {
+            setInvalid((p) => ({ ...p, destination: false }));
+            destination.onFocus();
+          }}
+          onSelect={(opt) => {
+            setInvalid((p) => ({ ...p, destination: false }));
+            destination.onSelect(opt);
+          }}
+          containerRef={destinationRef}
+          inputRef={destinationInputRef}
+          invalid={invalid.destination}
+          icon={
+            <span className="text-sky-300">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-5 w-5"
@@ -201,28 +421,9 @@ export const HomeSearchForm = ({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 10 12 3l9 7" />
               </svg>
             </span>
-            <input
-              className="w-full pl-10 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-              value={destination.state.query}
-              onChange={(e) => destination.setQuery(e.target.value)}
-              onFocus={() => destination.setOpen(true)}
-              placeholder="Thành phố muốn đến"
-            />
-          </div>
-          {destination.state.open && destination.state.options.length > 0 && (
-            <div className="absolute left-0 right-0 z-50 mt-1 bg-slate-900/95 backdrop-blur border border-white/10 rounded-lg shadow-xl max-h-60 overflow-auto pr-1">
-              {destination.state.options.map((opt) => (
-                <div
-                  key={opt.id}
-                  className="px-3 py-2 text-sm text-gray-100 hover:bg-sky-500/20 cursor-pointer"
-                  onClick={() => destination.select(opt)}
-                >
-                  {opt.name}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          }
+          hoverClassName="hover:bg-sky-500/20"
+        />
 
         <div className="relative">
           <label className="block text-sm font-medium text-gray-200 mb-1">Ngày khởi hành</label>
@@ -240,16 +441,25 @@ export const HomeSearchForm = ({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 2v4M8 2v4M3 10h18" />
               </svg>
             </span>
+
             <input
+              ref={dateInputRef}
               type="date"
-              className="w-full appearance-none pl-10 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:left-0 [&::-webkit-calendar-picker-indicator]:top-0"
+              min={today}
+              className={[
+                'w-full appearance-none pl-10 rounded-lg bg-black/40 border px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 cursor-pointer',
+                invalid.date ? 'border-red-500/60 focus:ring-red-400' : 'border-white/10 focus:ring-emerald-400',
+                '[&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:left-0 [&::-webkit-calendar-picker-indicator]:top-0',
+              ].join(' ')}
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => {
+                setInvalid((p) => ({ ...p, date: false }));
+                setDate(e.target.value);
+              }}
               onFocus={(e) => {
-                // ensure the calendar pops immediately on focus when supported
-                if (typeof (e.target as HTMLInputElement).showPicker === 'function') {
-                  (e.target as HTMLInputElement).showPicker();
-                }
+                setInvalid((p) => ({ ...p, date: false }));
+                const el = e.target as HTMLInputElement;
+                if (typeof el.showPicker === 'function') el.showPicker();
               }}
             />
           </div>
@@ -261,9 +471,6 @@ export const HomeSearchForm = ({
           </Button>
         </div>
       </div>
-      {error ? <div className="text-sm text-red-400 mt-2">{error}</div> : null}
     </form>
   );
 };
-
-

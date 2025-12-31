@@ -22,6 +22,15 @@ type StopDraft = {
   estimatedOffsetMinutes: number;
 };
 
+const optionTextStyle: React.CSSProperties = { color: '#111' }; // FIX: native dropdown nền trắng -> chữ phải đen
+const placeholderOptionStyle: React.CSSProperties = { color: '#666' };
+
+const parseSelectNumber = (value: string): number | '' => {
+  if (value === '') return '';
+  const n = Number(value);
+  return Number.isFinite(n) ? n : '';
+};
+
 export const AdminRoutesPage = () => {
   const { accessToken } = useAuth();
   const [routes, setRoutes] = useState<Route[]>([]);
@@ -57,6 +66,7 @@ export const AdminRoutesPage = () => {
     loadCities();
     loadRoutes();
   }, [accessToken, loadCities, loadRoutes]);
+
   const autoName = (originId?: number | '', destId?: number | '') => {
     if (!originId || !destId) return '';
     const origin = cities.find((c) => c.id === originId);
@@ -77,6 +87,7 @@ export const AdminRoutesPage = () => {
 
   const submitRoute = async () => {
     setError('');
+
     if (!form.originCityId || !form.destinationCityId || !form.estimatedDurationMinutes) {
       setError('Vui lòng nhập đủ thông tin tuyến.');
       return;
@@ -85,15 +96,14 @@ export const AdminRoutesPage = () => {
       setError('Điểm đi và điểm đến không được trùng nhau.');
       return;
     }
+
     const auto = autoName(form.originCityId, form.destinationCityId);
     const name = form.name || auto;
-    console.log(name)
+
     const originCityId = Number(form.originCityId);
-    console.log(originCityId)
     const destinationCityId = Number(form.destinationCityId);
-    console.log(destinationCityId)
     const estimatedDurationMinutes = Number(form.estimatedDurationMinutes);
-    console.log(estimatedDurationMinutes)
+
     if (!Number.isFinite(originCityId) || originCityId <= 0) {
       setError('Vui lòng chọn điểm đi hợp lệ.');
       return;
@@ -106,12 +116,9 @@ export const AdminRoutesPage = () => {
       setError('Thời gian phải là số phút dương.');
       return;
     }
-    const payload = {
-      name,
-      originCityId,
-      destinationCityId,
-      estimatedDurationMinutes,
-    };
+
+    const payload = { name, originCityId, destinationCityId, estimatedDurationMinutes };
+
     try {
       if (editingId) {
         await apiClient(`/admin/routes/${editingId}`, {
@@ -171,11 +178,23 @@ export const AdminRoutesPage = () => {
 
   const saveStops = async () => {
     if (!stopsRouteId) return;
+
+    // validate nhanh để khỏi gửi cityId = 0/NaN
+    for (const s of stopsDraft) {
+      if (!s.cityId) {
+        setError('Vui lòng chọn đầy đủ thành phố cho các điểm dừng.');
+        return;
+      }
+    }
+
     await apiClient(`/admin/routes/${stopsRouteId}/stops`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ stops: stopsDraft.map((s) => ({ ...s, cityId: Number(s.cityId) })) }),
+      body: JSON.stringify({
+        stops: stopsDraft.map((s) => ({ ...s, cityId: Number(s.cityId) })),
+      }),
     });
+
     setStopsRouteId(null);
     setStopsDraft([]);
     loadRoutes();
@@ -201,17 +220,19 @@ export const AdminRoutesPage = () => {
             label="Thời gian (phút)"
             type="number"
             value={form.estimatedDurationMinutes}
-            onChange={(e) =>
-              setForm({ ...form, estimatedDurationMinutes: Number(e.target.value) || '' })
-            }
+            onChange={(e) => {
+              const v = e.target.value;
+              setForm({ ...form, estimatedDurationMinutes: v === '' ? '' : Number(v) });
+            }}
           />
+
           <label className="block text-sm text-gray-200">
             <div className="mb-2 font-medium">Điểm đi</div>
             <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
-              value={form.originCityId}
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={form.originCityId === '' ? '' : String(form.originCityId)}
               onChange={(e) => {
-                const value = Number(e.target.value);
+                const value = parseSelectNumber(e.target.value);
                 const newName = autoName(value, form.destinationCityId);
                 setForm((prev) => ({
                   ...prev,
@@ -220,21 +241,24 @@ export const AdminRoutesPage = () => {
                 }));
               }}
             >
-              <option value="">Chọn thành phố</option>
+              <option value="" style={placeholderOptionStyle}>
+                Chọn thành phố
+              </option>
               {cities.map((c) => (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={String(c.id)} style={optionTextStyle}>
                   {c.name}
                 </option>
               ))}
             </select>
           </label>
+
           <label className="block text-sm text-gray-200">
             <div className="mb-2 font-medium">Điểm đến</div>
             <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
-              value={form.destinationCityId}
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={form.destinationCityId === '' ? '' : String(form.destinationCityId)}
               onChange={(e) => {
-                const value = Number(e.target.value);
+                const value = parseSelectNumber(e.target.value);
                 const newName = autoName(form.originCityId, value);
                 setForm((prev) => ({
                   ...prev,
@@ -243,16 +267,20 @@ export const AdminRoutesPage = () => {
                 }));
               }}
             >
-              <option value="">Chọn thành phố</option>
+              <option value="" style={placeholderOptionStyle}>
+                Chọn thành phố
+              </option>
               {cities.map((c) => (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={String(c.id)} style={optionTextStyle}>
                   {c.name}
                 </option>
               ))}
             </select>
           </label>
         </div>
+
         {error ? <div className="text-error text-sm mt-2">{error}</div> : null}
+
         <div className="mt-4 flex gap-2">
           <Button onClick={submitRoute}>{editingId ? 'Lưu thay đổi' : 'Tạo tuyến'}</Button>
           {editingId ? (
@@ -304,28 +332,30 @@ export const AdminRoutesPage = () => {
                 <label className="block text-sm text-gray-200">
                   <div className="mb-1 font-medium">Thành phố</div>
                   <select
-                    className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
-                    value={s.cityId}
-                    onChange={(e) =>
+                    className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+                    value={s.cityId === '' ? '' : String(s.cityId)}
+                    onChange={(e) => {
+                      const value = parseSelectNumber(e.target.value);
                       setStopsDraft((prev) =>
-                        prev.map((item, i) =>
-                          i === idx ? { ...item, cityId: Number(e.target.value) } : item,
-                        ),
-                      )
-                    }
+                        prev.map((item, i) => (i === idx ? { ...item, cityId: value } : item)),
+                      );
+                    }}
                   >
-                    <option value="">Chọn</option>
+                    <option value="" style={placeholderOptionStyle}>
+                      Chọn
+                    </option>
                     {cities.map((c) => (
-                      <option key={c.id} value={c.id}>
+                      <option key={c.id} value={String(c.id)} style={optionTextStyle}>
                         {c.name}
                       </option>
                     ))}
                   </select>
                 </label>
+
                 <label className="block text-sm text-gray-200">
                   <div className="mb-1 font-medium">Loại</div>
                   <select
-                    className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
+                    className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
                     value={s.type}
                     onChange={(e) =>
                       setStopsDraft((prev) =>
@@ -335,10 +365,15 @@ export const AdminRoutesPage = () => {
                       )
                     }
                   >
-                    <option value="PICKUP">Đón</option>
-                    <option value="DROPOFF">Trả</option>
+                    <option value="PICKUP" style={optionTextStyle}>
+                      Đón
+                    </option>
+                    <option value="DROPOFF" style={optionTextStyle}>
+                      Trả
+                    </option>
                   </select>
                 </label>
+
                 <FormField
                   label="Thứ tự"
                   type="number"
@@ -346,10 +381,13 @@ export const AdminRoutesPage = () => {
                   className="w-full"
                   onChange={(e) =>
                     setStopsDraft((prev) =>
-                      prev.map((item, i) => (i === idx ? { ...item, order: Number(e.target.value) } : item)),
+                      prev.map((item, i) =>
+                        i === idx ? { ...item, order: Number(e.target.value) } : item,
+                      ),
                     )
                   }
                 />
+
                 <FormField
                   label="Offset (phút)"
                   type="number"
@@ -358,19 +396,28 @@ export const AdminRoutesPage = () => {
                   onChange={(e) =>
                     setStopsDraft((prev) =>
                       prev.map((item, i) =>
-                        i === idx ? { ...item, estimatedOffsetMinutes: Number(e.target.value) } : item,
+                        i === idx
+                          ? { ...item, estimatedOffsetMinutes: Number(e.target.value) }
+                          : item,
                       ),
                     )
                   }
                 />
               </div>
             ))}
+
             <div className="flex gap-2">
               <Button variant="secondary" onClick={addStopRow}>
                 Thêm điểm
               </Button>
               <Button onClick={saveStops}>Lưu điểm dừng</Button>
-              <Button variant="ghost" onClick={() => setStopsRouteId(null)}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setStopsRouteId(null);
+                  setStopsDraft([]);
+                }}
+              >
                 Đóng
               </Button>
             </div>

@@ -33,28 +33,57 @@ export class SeatMapsService {
     }
   }
 
+  // async create(dto: CreateSeatMapDto) {
+  //   this.validateSeats(dto.rows, dto.cols, dto.seats);
+  //   const map = this.seatMapRepo.create({
+  //     name: dto.name,
+  //     rows: dto.rows,
+  //     cols: dto.cols,
+  //   });
+  //   const saved = await this.seatMapRepo.save(map);
+  //   const seatEntities = dto.seats.map((s) =>
+  //     this.seatRepo.create({
+  //       seatMap: saved,
+  //       code: s.code,
+  //       row: s.row,
+  //       col: s.col,
+  //       price: s.price,
+  //       seatType: s.seatType ?? 'standard',
+  //       isActive: s.isActive ?? true,
+  //     }),
+  //   );
+  //   await this.seatRepo.save(seatEntities);
+  //   return this.findById(saved.id);
+  // }
+
   async create(dto: CreateSeatMapDto) {
     this.validateSeats(dto.rows, dto.cols, dto.seats);
-    const map = this.seatMapRepo.create({
-      name: dto.name,
-      rows: dto.rows,
-      cols: dto.cols,
-    });
-    const saved = await this.seatMapRepo.save(map);
-    const seatEntities = dto.seats.map((s) =>
-      this.seatRepo.create({
+
+    return this.seatMapRepo.manager.transaction(async (em) => {
+      const mapRepo = em.getRepository(SeatMap);
+      const seatRepo = em.getRepository(SeatDefinition);
+
+      const saved = await mapRepo.save(mapRepo.create({
+        name: dto.name, rows: dto.rows, cols: dto.cols
+      }));
+
+      await seatRepo.save(dto.seats.map((s) => seatRepo.create({
         seatMap: saved,
         code: s.code,
         row: s.row,
         col: s.col,
-        price: s.price,
         seatType: s.seatType ?? 'standard',
         isActive: s.isActive ?? true,
-      }),
-    );
-    await this.seatRepo.save(seatEntities);
-    return this.findById(saved.id);
+      })));
+
+      return mapRepo.findOne({
+        where: { id: saved.id },
+        relations: ['seats'],
+        order: { seats: { row: 'ASC', col: 'ASC' } },
+      });
+    });
   }
+
 
   list() {
     return this.seatMapRepo.find();
@@ -88,7 +117,6 @@ export class SeatMapsService {
           code: s.code,
           row: s.row,
           col: s.col,
-          price: s.price,
           seatType: s.seatType ?? 'standard',
           isActive: s.isActive ?? true,
         }),

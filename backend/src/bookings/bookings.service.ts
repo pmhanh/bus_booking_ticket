@@ -10,24 +10,24 @@ import {
   DataSource,
   In,
   LessThan,
-  MoreThan,
-  Not,
   Repository,
 } from 'typeorm';
 import * as nodemailer from 'nodemailer';
 import { Booking } from './booking.entity';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { Trip } from '../trips/trip.entity';
-import { SeatLock } from '../trips/seat-lock.entity';
 import { SeatMap } from '../seat-maps/seat-map.entity';
 import { LookupBookingDto } from './dto/lookup-booking.dto';
 import { ConfigService } from '@nestjs/config';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { TripSeatsService } from '../trips/trip-seats.service';
-import { SeatValidationService } from '../trips/seat-validation.service';
 import { BookingReferenceService } from './booking-reference.service';
 import { GuestLookupDto } from './dto/guest-lookup.dto';
 import { isUUID } from 'class-validator';
+import { BookingDetail } from './booking-detail.entity';
+import { TripSeat } from 'src/trips/trip-seat.entity';
+import { SeatLockService } from 'src/redis/seat-lock.service';
+import { SeatGateway } from 'src/realtime/seat.gateway';
 
 type BookingAccessOptions = {
   userId?: string;
@@ -47,14 +47,13 @@ export class BookingsService {
     private readonly bookingRepo: Repository<Booking>,
     @InjectRepository(Trip)
     private readonly tripRepo: Repository<Trip>,
-    @InjectRepository(SeatLock)
-    private readonly seatLockRepo: Repository<SeatLock>,
     @InjectRepository(SeatMap)
     private readonly seatMapRepo: Repository<SeatMap>,
-    private readonly seatValidation: SeatValidationService,
     private readonly tripSeatsService: TripSeatsService,
     private readonly configService: ConfigService,
     private readonly bookingRefService: BookingReferenceService,
+    private readonly seatLockService: SeatLockService,
+    private readonly seatGateway: SeatGateway,
   ) {
     const smtpHost = this.configService.get<string>('SMTP_HOST');
     const smtpUser = this.configService.get<string>('SMTP_USER');
@@ -91,21 +90,6 @@ export class BookingsService {
     return { trip, seatMap };
   }
 
-  private async expireOldBookings(tripId?: number) {
-    const where = {
-      status: 'PENDING',
-      expiresAt: LessThan(new Date()),
-      ...(tripId ? { trip: { id: tripId } } : {}),
-    } as any;
-    const expiring = await this.bookingRepo.find({ where });
-    if (expiring.length) {
-      await this.bookingRepo.update(
-        { id: In(expiring.map((b) => b.id)) },
-        { status: 'EXPIRED' },
-      );
-    }
-  }
-
   private ensureSeatsExist(seatMap: SeatMap, seats: string[]) {
     const lookup = new Map(seatMap.seats.map((s) => [s.code, s]));
     const missing = seats.filter((s) => !lookup.get(s));
@@ -117,201 +101,6 @@ export class BookingsService {
         `Inactive seats cannot be booked: ${inactive.join(', ')}`,
       );
     return seats.map((s) => lookup.get(s)!);
-  }
-
-  private async assertNoConflicts(
-    tripId: number,
-    seats: string[],
-    lockToken?: string,
-    ignoreBookingId?: string,
-  ) {
-    const locks = await this.seatLockRepo.find({
-      where: {
-        trip: { id: tripId },
-        seatCode: In(seats),
-        status: 'ACTIVE',
-        expiresAt: MoreThan(new Date()),
-      },
-    });
-    const conflictingLocks = locks.filter((l) => l.lockToken !== lockToken);
-    if (conflictingLocks.length)
-      throw new BadRequestException('Seats are currently locked by another user');
-
-    const activeBookings = await this.bookingRepo.find({
-      where: [
-        {
-          trip: { id: tripId },
-          status: 'CONFIRMED',
-          ...(ignoreBookingId ? { id: Not(ignoreBookingId) } : {}),
-        },
-        {
-          trip: { id: tripId },
-          status: 'PENDING',
-          expiresAt: MoreThan(new Date()),
-          ...(ignoreBookingId ? { id: Not(ignoreBookingId) } : {}),
-        },
-      ],
-    });
-    const booked = new Set(
-      activeBookings
-        .filter((b) => (ignoreBookingId ? b.id !== ignoreBookingId : true))
-        .flatMap((b) => b.seats.map((s) => s.trim())),
-    );
-    const bookedConflicts = seats.filter((s) => booked.has(s));
-    if (bookedConflicts.length)
-      throw new BadRequestException(
-        `Seats already booked: ${bookedConflicts.join(', ')}`,
-      );
-  }
-
-  private async findBookingByCode(code: string) {
-    const booking = await this.bookingRepo.findOne({
-      where: isUUID(code)
-        ? [{ id: code }, { reference: code }]
-        : [{ reference: code }],
-      relations: [
-        'trip',
-        'trip.route',
-        'trip.route.originCity',
-        'trip.route.destinationCity',
-        'trip.bus',
-      ],
-    });
-    return booking;
-  }
-
-  private assertAccess(booking: Booking, opts: BookingAccessOptions = {}) {
-    const { userId, contactEmail, contactPhone } = opts;
-    if (booking.userId) {
-      if (!userId || booking.userId !== userId) {
-        throw new ForbiddenException('Booking belongs to another user');
-      }
-      return;
-    }
-
-    const emailMatch = contactEmail && booking.contactEmail === contactEmail;
-    const phoneMatch = contactPhone && booking.contactPhone === contactPhone;
-    if (!emailMatch && !phoneMatch) {
-      throw new ForbiddenException('Contact information does not match booking');
-    }
-  }
-
-  private async assertLockOwnership(
-    tripId: number,
-    seats: string[],
-    lockToken?: string,
-    userId?: string,
-    guestSessionId?: string,
-  ) {
-    if (!lockToken) throw new BadRequestException('lockToken is required');
-    const locks = await this.seatLockRepo.find({
-      where: {
-        trip: { id: tripId },
-        lockToken,
-        status: 'ACTIVE',
-        expiresAt: MoreThan(new Date()),
-      },
-    });
-    if (!locks.length)
-      throw new BadRequestException('Lock not found or already expired');
-    const owner = locks[0];
-    if (owner.userId && userId && owner.userId !== userId)
-      throw new ForbiddenException('Lock belongs to another user');
-    if (
-      owner.guestSessionId &&
-      guestSessionId &&
-      owner.guestSessionId !== guestSessionId
-    )
-      throw new ForbiddenException('Lock belongs to another guest');
-    const lockedSeats = new Set(locks.map((l) => l.seatCode));
-    const missing = seats.filter((s) => !lockedSeats.has(s));
-    if (missing.length)
-      throw new BadRequestException(
-        `Lock does not cover seats: ${missing.join(', ')}`,
-      );
-  }
-
-  async create(dto: CreateBookingDto, userId?: string) {
-    if (!dto.lockToken)
-      throw new BadRequestException('lockToken is required to create booking');
-    await this.expireOldBookings(dto.tripId);
-    const seats = Array.from(new Set(dto.seats.map((s) => s.trim())));
-    if (!seats.length) throw new BadRequestException('Seats are required');
-    await this.assertLockOwnership(
-      dto.tripId,
-      seats,
-      dto.lockToken,
-      userId,
-      dto.guestSessionId,
-    );
-    const saved = await this.dataSource.transaction(async (manager) => {
-      const { trip, seats: seatEntities } =
-        await this.seatValidation.validateSeatsForBooking(
-          dto.tripId,
-          seats,
-          dto.lockToken,
-          userId,
-          dto.guestSessionId,
-          manager,
-        );
-      const totalPrice = seatEntities.reduce(
-        (sum, seat) => sum + (seat.price || trip.basePrice),
-        0,
-      );
-      const reference = await this.bookingRefService.generateUnique();
-      const bookingRepo = manager.getRepository(Booking);
-      const booking = bookingRepo.create({
-        reference,
-        trip,
-        seats,
-        userId,
-        contactName: dto.contactName,
-        contactEmail: dto.contactEmail,
-        contactPhone: dto.contactPhone,
-        passengers: dto.passengers,
-        totalPrice,
-        status: 'CONFIRMED',
-        expiresAt: null,
-      });
-      const persisted = await bookingRepo.save(booking);
-      await manager.update(
-        SeatLock,
-        {
-          trip: { id: trip.id },
-          lockToken: dto.lockToken,
-          status: 'ACTIVE',
-          expiresAt: MoreThan(new Date()),
-        },
-        { status: 'USED' },
-      );
-      return persisted;
-    });
-
-    this.trySendTicket(saved).catch(() => {
-      /* best-effort */
-    });
-    return saved;
-  }
-
-  async getBooking(code: string, opts: BookingAccessOptions = {}) {
-    const { requireContactForGuest, ...access } = opts;
-    await this.expireOldBookings();
-    const booking = await this.findBookingByCode(code);
-    if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.status === 'PENDING' && booking.expiresAt && booking.expiresAt < new Date()) {
-      booking.status = 'EXPIRED';
-      await this.bookingRepo.save(booking);
-    }
-    if (
-      booking.userId ||
-      opts.userId ||
-      opts.contactEmail ||
-      opts.contactPhone ||
-      requireContactForGuest
-    ) {
-      this.assertAccess(booking, access);
-    }
-    return booking;
   }
 
   async listForUser(userId: string) {
@@ -391,8 +180,8 @@ export class BookingsService {
     );
   }
 
-  async getSeatStatus(tripId: number, lockToken?: string) {
-    const availability = await this.tripSeatsService.getSeatMap(tripId, lockToken);
+  async getSeatStatus(tripId: number) {
+    const availability = await this.tripSeatsService.getSeatMap(tripId);
     return {
       seatMap: availability.seatMap,
       basePrice: availability.trip.basePrice,
@@ -405,110 +194,13 @@ export class BookingsService {
         status:
           seat.status === 'booked'
             ? 'booked'
-            : seat.status === 'locked'
-              ? 'locked'
-              : seat.status === 'held'
-                ? 'reserved'
-                : seat.isActive
-                  ? 'available'
-                  : 'booked',
+            : seat.status === 'inactive'
+            ? 'inactive'
+            : seat.status === 'held'
+              ? 'held'
+              : 'available',
       })),
     };
-  }
-
-  async updateBooking(code: string, dto: UpdateBookingDto, userId?: string) {
-    const booking = await this.getBooking(code, {
-      userId,
-      contactEmail: dto.contactEmail,
-      contactPhone: dto.contactPhone,
-      requireContactForGuest: true,
-    });
-    const { trip } = await this.getTripContext(booking.trip.id);
-    const currentSeats = booking.seats.slice();
-    if (dto.seats) {
-      const seats = Array.from(new Set(dto.seats.map((s) => s.trim())));
-      if (!seats.length) throw new BadRequestException('At least one seat is required');
-      const validation = await this.seatValidation.validateSeatsForBooking(
-        trip.id,
-        seats,
-        undefined,
-        userId,
-      );
-      booking.seats = seats;
-      booking.totalPrice = validation.seats.reduce(
-        (sum, seat) => sum + (seat.price || trip.basePrice),
-        0,
-      );
-      if (!dto.passengers) {
-        const allowed = new Set(seats);
-        booking.passengers = (booking.passengers || []).filter((p) =>
-          p.seatCode ? allowed.has(p.seatCode) : false,
-        );
-      }
-    }
-
-    if (dto.passengers) {
-      const seats = new Set(dto.seats ?? booking.seats ?? currentSeats);
-      booking.passengers = dto.passengers
-        .filter((p) => !p.seatCode || seats.has(p.seatCode))
-        .map((p) => ({
-          name: p.name,
-          phone: p.phone,
-          idNumber: p.idNumber,
-          seatCode: p.seatCode,
-        }));
-    }
-
-    if (dto.contactName !== undefined) booking.contactName = dto.contactName;
-    if (dto.contactEmail !== undefined) booking.contactEmail = dto.contactEmail;
-    if (dto.contactPhone !== undefined) booking.contactPhone = dto.contactPhone;
-
-    const updated = await this.bookingRepo.save(booking);
-    return updated;
-  }
-
-  async confirm(code: string, opts: BookingAccessOptions = {}) {
-    const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
-    if (booking.status === 'CONFIRMED') return booking;
-    if (booking.status === 'EXPIRED')
-      throw new BadRequestException('Booking already expired');
-    booking.status = 'CONFIRMED';
-    booking.expiresAt = null;
-    const updated = await this.bookingRepo.save(booking);
-    await this.seatLockRepo.update(
-      {
-        trip: { id: booking.trip.id },
-        seatCode: In(booking.seats),
-        status: 'ACTIVE',
-      },
-      { status: 'USED' },
-    );
-    this.trySendTicket(updated).catch((err) =>
-      console.warn('Auto send ticket failed:', err?.message || err),
-    );
-    return updated;
-  }
-
-  async cancel(code: string, opts: BookingAccessOptions = {}) {
-    const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
-    booking.status = 'CANCELLED';
-    const updated = await this.bookingRepo.save(booking);
-    return updated;
-  }
-
-  async ticketContent(code: string, opts: BookingAccessOptions = {}) {
-    const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
-    if (booking.status === 'EXPIRED' || booking.status === 'CANCELLED')
-      throw new BadRequestException('Booking is not active');
-    const lines = [
-      `Booking Reference: ${booking.reference}`,
-      `Trip: ${booking.trip.route.originCity.name} -> ${booking.trip.route.destinationCity.name}`,
-      `Departure: ${booking.trip.departureTime.toISOString()}`,
-      `Seats: ${booking.seats.join(', ')}`,
-      `Status: ${booking.status}`,
-      `Contact: ${booking.contactName} (${booking.contactEmail})`,
-    ];
-    return { booking, content: lines.join('\n') };
   }
 
   async sendTicket(code: string, opts: BookingAccessOptions = {}) {
@@ -526,16 +218,299 @@ export class BookingsService {
     return { ok: true };
   }
 
+  private async expireOldBookings(tripId?: number) {
+    const where = {
+      status: 'PENDING',
+      expiresAt: LessThan(new Date()),
+      ...(tripId ? { trip: { id: tripId } } : {}),
+    } as any;
+
+    const expiring = await this.bookingRepo.find({ where });
+    if (expiring.length) {
+      await this.bookingRepo.update(
+        { id: In(expiring.map((b) => b.id)) },
+        { status: 'EXPIRED' },
+      );
+    }
+  }
+
+  private async findBookingByCode(code: string) {
+    const booking = await this.bookingRepo.findOne({
+      where: isUUID(code)
+        ? [{ id: code }, { reference: code }]
+        : [{ reference: code }],
+      relations: [
+        'trip',
+        'trip.route',
+        'trip.route.originCity',
+        'trip.route.destinationCity',
+        'trip.bus',
+        'details',
+        'details.tripSeat',
+      ],
+      order: { details: { id: 'ASC' } },
+    });
+    return booking;
+  }
+
+  private assertAccess(booking: Booking, opts: BookingAccessOptions = {}) {
+    const { userId, contactEmail, contactPhone } = opts;
+    if (booking.userId) {
+      if (!userId || booking.userId !== userId) {
+        throw new ForbiddenException('Booking belongs to another user');
+      }
+      return;
+    }
+
+    const emailMatch = contactEmail && booking.contactEmail === contactEmail;
+    const phoneMatch = contactPhone && booking.contactPhone === contactPhone;
+    if (!emailMatch && !phoneMatch) {
+      throw new ForbiddenException('Contact information does not match booking');
+    }
+  }
+
+  // ✅ CREATE: PENDING + booking_details
+  async create(dto: CreateBookingDto, userId?: string) {
+    const seatCodes = Array.from(new Set(dto.passengers.map((p) => p.seatCode)));
+    if (!seatCodes.length) throw new BadRequestException('passengers is empty');
+
+    // ✅ verify redis hold
+    await this.seatLockService.assertOwnedLocks(dto.tripId, seatCodes, dto.lockToken);
+
+    return this.dataSource.transaction(async (manager) => {
+      const tripSeatRepo = manager.getRepository(TripSeat);
+      const bookingRepo = manager.getRepository(Booking);
+      const detailRepo = manager.getRepository(BookingDetail);
+
+      // ✅ TripSeat dùng relation trip + seatCodeSnapshot
+      const tripSeats = await tripSeatRepo.find({
+        where: {
+          trip: { id: dto.tripId },
+          seatCodeSnapshot: In(seatCodes),
+        } as any,
+      });
+
+      if (tripSeats.length !== seatCodes.length) {
+        throw new BadRequestException('Some seatCodes are invalid');
+      }
+
+      const booked = tripSeats.find((s) => s.isBooked === true);
+      if (booked) {
+        throw new BadRequestException(
+          `Seat already booked: ${booked.seatCodeSnapshot}`,
+        );
+      }
+
+      // ✅ Tạo Booking bằng new Booking() để né overload Booking[]
+      const booking = new Booking();
+      (booking as any).trip = { id: dto.tripId };          // ⚠️ nếu Booking entity của bạn là relation trip thì sửa bên dưới
+      // Nếu Booking entity của bạn có relation trip: booking.trip = { id: dto.tripId } as any;
+
+      // userId column (theo code bạn dùng booking.userId)
+      (booking as any).userId = userId ?? undefined;
+
+      (booking as any).status = 'PENDING';
+      (booking as any).lockToken = dto.lockToken;
+      (booking as any).contactName = dto.contactName;
+      (booking as any).contactEmail = dto.contactEmail;
+      (booking as any).contactPhone = dto.contactPhone ?? undefined;
+
+      const savedBooking = await bookingRepo.save(booking); // ✅ savedBooking: Booking
+
+      // map seatCode -> TripSeat
+      const seatMap = new Map(tripSeats.map((s) => [s.seatCodeSnapshot, s]));
+
+      const details = dto.passengers.map((p) => {
+        const ts = seatMap.get(p.seatCode);
+        if (!ts) throw new BadRequestException(`Seat not found: ${p.seatCode}`);
+
+        const d = new BookingDetail();
+        d.booking = savedBooking;
+        d.tripSeat = ts;
+        d.seatCodeSnapshot = p.seatCode;
+        d.priceSnapshot = ts.price;
+        d.passengerName = p.name;
+        d.passengerPhone = p.phone ?? undefined;      // ✅ undefined, không dùng null
+        d.passengerIdNumber = p.idNumber ?? undefined; // ✅ undefined, không dùng null
+        return d;
+      });
+
+      await detailRepo.save(details);
+
+      return { ok: true, bookingId: savedBooking.id };
+    });
+  }
+
+
+
+  async getBooking(code: string, opts: BookingAccessOptions = {}) {
+    const { requireContactForGuest, ...access } = opts;
+    await this.expireOldBookings();
+    const booking = await this.findBookingByCode(code);
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    if (
+      booking.userId ||
+      opts.userId ||
+      opts.contactEmail ||
+      opts.contactPhone ||
+      requireContactForGuest
+    ) {
+      this.assertAccess(booking, access);
+    }
+    return booking;
+  }
+
+  async updateBooking(code: string, dto: UpdateBookingDto, userId?: string) {
+    const booking = await this.getBooking(code, {
+      userId,
+      contactEmail: dto.contactEmail,
+      contactPhone: dto.contactPhone,
+      requireContactForGuest: true,
+    });
+
+    if (dto.contactName !== undefined) booking.contactName = dto.contactName;
+    if (dto.contactEmail !== undefined) booking.contactEmail = dto.contactEmail;
+    if (dto.contactPhone !== undefined) booking.contactPhone = dto.contactPhone;
+
+    return this.bookingRepo.save(booking);
+  }
+
+  async confirm(code: string, opts: BookingAccessOptions = {}) {
+    // Access + load booking (đã include trip + details + tripSeat trong getBooking/findBookingByCode của bạn)
+    const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
+
+    if (booking.status === 'CONFIRMED') return booking;
+    if (booking.status === 'EXPIRED')
+      throw new BadRequestException('Booking already expired');
+    if (booking.status === 'CANCELLED')
+      throw new BadRequestException('Booking was cancelled');
+
+    // chuẩn bị data để unlock/broadcast sau commit
+    const tripId = booking.trip?.id ?? undefined;
+    const lockToken = (booking as any).lockToken as string | undefined;
+
+    const updated = await this.dataSource.transaction(async (manager) => {
+      const bookingRepo = manager.getRepository(Booking);
+      const tripSeatRepo = manager.getRepository(TripSeat);
+
+      // Reload fresh để chắc chắn nhất (avoid dirty state)
+      const fresh = await bookingRepo.findOne({
+        where: { id: booking.id } as any,
+        relations: ['trip', 'details', 'details.tripSeat'],
+        order: { details: { id: 'ASC' } } as any,
+      });
+      if (!fresh) throw new NotFoundException('Booking not found');
+
+      if (fresh.status === 'CONFIRMED') return fresh;
+      if (fresh.status === 'EXPIRED')
+        throw new BadRequestException('Booking already expired');
+      if (fresh.status === 'CANCELLED')
+        throw new BadRequestException('Booking was cancelled');
+
+      // Nếu booking có expiresAt, check lại trong confirm để chắc:
+      if (fresh.expiresAt && fresh.expiresAt.getTime() < Date.now()) {
+        fresh.status = 'EXPIRED';
+        await bookingRepo.save(fresh);
+        throw new BadRequestException('Booking expired');
+      }
+
+      // Lấy danh sách tripSeatIds
+      const tripSeatIds = (fresh.details ?? [])
+        .map((d) => d.tripSeat?.id)
+        .filter(Boolean) as number[];
+      if (!tripSeatIds.length) {
+        throw new BadRequestException('Booking has no seats');
+      }
+
+      // Book seats atomically (ngăn double-book)
+      const res = await tripSeatRepo
+        .createQueryBuilder()
+        .update(TripSeat)
+        .set({ isBooked: true, bookedAt: new Date() })
+        .where('id IN (:...ids)', { ids: tripSeatIds })
+        .andWhere('isBooked = false')
+        .execute();
+
+      if (res.affected !== tripSeatIds.length) {
+        throw new BadRequestException('Some seats already booked by another booking');
+      }
+
+      // Update booking status
+      fresh.status = 'CONFIRMED';
+      fresh.expiresAt = null;
+
+      // (optional) cập nhật totalPrice nếu bạn muốn chắc chắn snapshot
+      // fresh.totalPrice = fresh.details.reduce((sum, d) => sum + (d.priceSnapshot ?? 0), 0);
+
+      await bookingRepo.save(fresh);
+      return fresh;
+    });
+
+    // ---- After commit: unlock redis best-effort ----
+    // seatCodes dùng snapshot trong details (ổn định)
+    const seatCodes = (updated.details ?? []).map((d) => d.seatCodeSnapshot).filter(Boolean);
+
+    if (tripId && lockToken && seatCodes.length) {
+      try {
+        await this.seatLockService.unlockSeats(tripId, seatCodes, lockToken);
+      } catch {
+        // ignore: lock có thể đã hết TTL
+      }
+    }
+
+    // ---- After commit: websocket broadcast ----
+    if (tripId && seatCodes.length) {
+      this.seatGateway.emitSeatsChanged(
+        tripId,
+        seatCodes.map((code) => ({ seatCode: code, status: 'booked' })),
+      );
+    }
+
+    this.trySendTicket(updated).catch(() => {});
+    return updated;
+  }
+
+
+  async cancel(code: string, opts: BookingAccessOptions = {}) {
+    const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
+    if (booking.status === 'CONFIRMED') {
+      // tuỳ policy: hoàn tiền / disallow cancel
+      // hiện tại cho cancel vẫn ok nhưng nhớ xử lý refund nếu có payment
+    }
+    booking.status = 'CANCELLED';
+    return this.bookingRepo.save(booking);
+  }
+
+  async ticketContent(code: string, opts: BookingAccessOptions = {}) {
+    const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
+    if (booking.status !== 'CONFIRMED')
+      throw new BadRequestException('Ticket only available for confirmed bookings');
+
+    const seatList = (booking.details ?? []).map((d) => d.seatCodeSnapshot).join(', ');
+
+    const lines = [
+      `Booking Reference: ${booking.reference}`,
+      `Trip: ${booking.trip.route.originCity.name} -> ${booking.trip.route.destinationCity.name}`,
+      `Departure: ${booking.trip.departureTime.toISOString()}`,
+      `Seats: ${seatList}`,
+      `Status: ${booking.status}`,
+      `Contact: ${booking.contactName} (${booking.contactEmail})`,
+    ];
+    return { booking, content: lines.join('\n') };
+  }
+
   private formatTicketContent(booking: Booking) {
     const depart = booking.trip.departureTime.toISOString();
     const arrive = booking.trip.arrivalTime.toISOString();
+    const seats = (booking.details ?? []).map((d) => d.seatCodeSnapshot).join(', ');
     const lines = [
       `Booking Reference: ${booking.reference}`,
       `Status: ${booking.status}`,
       `Route: ${booking.trip.route.originCity.name} -> ${booking.trip.route.destinationCity.name}`,
       `Departure: ${depart}`,
       `Arrival: ${arrive}`,
-      `Seats: ${booking.seats.join(', ')}`,
+      `Seats: ${seats}`,
       `Contact: ${booking.contactName} (${booking.contactEmail || booking.contactPhone || ''})`,
       `Total: ${booking.totalPrice.toLocaleString()} VND`,
     ];
@@ -546,12 +521,10 @@ export class BookingsService {
     if (!this.mailer) return;
     if (!booking.contactEmail) return;
     const text = this.formatTicketContent(booking);
-    const subjectPrefix =
-      booking.status === 'CONFIRMED' ? 'E-ticket' : 'Booking received';
     await this.mailer.sendMail({
       from: this.mailFrom,
       to: booking.contactEmail,
-      subject: `${subjectPrefix} for booking ${booking.reference}`,
+      subject: `E-ticket for booking ${booking.reference}`,
       text,
     });
   }

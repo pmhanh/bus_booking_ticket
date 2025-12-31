@@ -37,9 +37,10 @@ export type SeatStatus = {
   col: number;
   price: number;
   isActive: boolean;
-  status: 'available' | 'reserved' | 'booked' | 'locked';
+  status: 'available' | 'held' | 'booked' | 'inactive';
   bookedBy?: string;
   bookingId?: string;
+  expiresAt?: string | null;
 };
 
 export type SeatStatusResponse = {

@@ -27,9 +27,6 @@ export class SeatDefinition {
   @Column({ type: 'int' })
   col: number;
 
-  @Column({ type: 'int' })
-  price: number;
-
   @Column({ default: 'standard' })
   seatType: string;
 

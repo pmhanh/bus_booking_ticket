@@ -34,7 +34,7 @@ type SeatMapViewProps = {
   selected: string[];
   onToggle: (seat: SeatWithState) => void;
   maxSelectable?: number;
-  activeLockToken?: string;
+  basePrice?: number;
 };
 
 export const SeatMapView = ({
@@ -43,7 +43,7 @@ export const SeatMapView = ({
   selected,
   onToggle,
   maxSelectable,
-  activeLockToken,
+  basePrice,
 }: SeatMapViewProps) => {
   const seatLookup = useMemo(() => {
     const map = new Map<string, SeatWithState>();
@@ -69,27 +69,24 @@ export const SeatMapView = ({
 
       const isSelected = selected.includes(seat.code);
       const isBooked = seat.status === 'booked';
-      const isLocked =
-        seat.status === 'locked' &&
-        (!activeLockToken || (seat.lockToken && seat.lockToken !== activeLockToken));
+      const isHeld = seat.status === 'held';
       const isDisabled =
         isBooked ||
-        isLocked ||
+        isHeld ||
         seat.status === 'inactive' ||
-        (limitReached && !isSelected && seat.status !== 'held');
+        (limitReached && !isSelected);
       const palette = seatTypeStyles[seat.seatType || 'standard'] || seatTypeStyles.standard;
       const statusClass =
         seat.status === 'inactive'
           ? 'bg-white/5 border-white/10 text-gray-600 cursor-not-allowed'
           : isBooked
             ? 'bg-rose-600/70 border-rose-300/60 text-white cursor-not-allowed'
-            : seat.status === 'locked'
-              ? 'bg-slate-800 border-rose-400/40 text-rose-200 cursor-not-allowed'
-              : clsx(
-                  `bg-gradient-to-br ${palette.bg} border ${palette.border} text-white`,
-                  seat.status === 'held' ? 'ring-2 ring-amber-300/80 shadow-lg' : '',
-                  isSelected ? 'ring-2 ring-emerald-200 shadow-xl scale-[1.02]' : '',
-                );
+            : isHeld
+              ? 'bg-amber-600/70 border-amber-200/70 text-white cursor-not-allowed'
+            : clsx(
+                `bg-gradient-to-br ${palette.bg} border ${palette.border} text-white`,
+                isSelected ? 'ring-2 ring-emerald-200 shadow-xl scale-[1.02]' : '',
+              );
 
       cells.push(
         <button
@@ -106,7 +103,7 @@ export const SeatMapView = ({
         >
           <span className="leading-none">{seat.code}</span>
           <span className="text-[11px] font-medium opacity-80">
-            {seat.price.toLocaleString()}đ
+            {(seat.price ?? basePrice ?? 0).toLocaleString()}đ
           </span>
         </button>,
       );
@@ -127,10 +124,10 @@ export const SeatMapView = ({
 
       <div className="grid md:grid-cols-2 gap-3 text-xs">
         <div className="flex flex-wrap gap-2">
-          <LegendChip color="bg-emerald-500/80" label="A - Available" />
-          <LegendChip color="bg-emerald-200/80 border border-emerald-200/70 text-emerald-950" label="B - Selected" />
-          <LegendChip color="bg-amber-400/80 text-amber-950" label="C - Locked" />
-          <LegendChip color="bg-rose-600/80" label="D - Booked" />
+          <LegendChip color="bg-emerald-500/80" label="Available" />
+          <LegendChip color="bg-emerald-200/80 border border-emerald-200/70 text-emerald-950" label="Selected" />
+          <LegendChip color="bg-amber-600/80" label="Held" />
+          <LegendChip color="bg-rose-600/80" label="Booked" />
           <LegendChip color="bg-slate-500/60" label="Inactive" />
         </div>
         <div className="flex flex-wrap gap-2">

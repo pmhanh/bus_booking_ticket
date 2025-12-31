@@ -1,14 +1,13 @@
 import type { Route } from '../../route/types/route';
 import type { Bus } from '../../bus/types/bus';
 
-export type SeatStatus = 'available' | 'locked' | 'held' | 'inactive' | 'booked';
+export type SeatStatus = 'available' | 'inactive' | 'held' | 'booked';
 
 export type SeatDefinition = {
   id: number;
   code: string;
   row: number;
   col: number;
-  price: number;
   isActive: boolean;
   seatType?: string;
 };
@@ -23,8 +22,7 @@ export type SeatMap = {
 
 export type SeatWithState = SeatDefinition & {
   status: SeatStatus;
-  lockedUntil?: string;
-  lockToken?: string;
+  expiresAt?: string | null;
 };
 
 export type SeatAvailability = {

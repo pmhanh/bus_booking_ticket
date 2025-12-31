@@ -6,24 +6,36 @@ import {
   IsOptional,
   IsPositive,
   IsString,
-  Length,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PassengerDto } from './passenger.dto';
+
+class BookingPassengerItemDto {
+  @IsString()
+  seatCode: string;
+
+  @IsString()
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  idNumber?: string;
+}
 
 export class CreateBookingDto {
   @IsInt()
   @IsPositive()
   tripId: number;
 
-  @IsArray()
-  @ArrayNotEmpty()
-  @IsString({ each: true })
-  seats: string[];
+  // Redis lock token (sẽ dùng để verify quyền lock)
+  @IsString()
+  lockToken: string;
 
   @IsString()
-  @Length(2, 120)
   contactName: string;
 
   @IsEmail()
@@ -33,16 +45,9 @@ export class CreateBookingDto {
   @IsString()
   contactPhone?: string;
 
-  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
   @ValidateNested({ each: true })
-  @Type(() => PassengerDto)
-  passengers?: PassengerDto[];
-
-  @IsOptional()
-  @IsString()
-  lockToken?: string;
-
-  @IsOptional()
-  @IsString()
-  guestSessionId?: string;
+  @Type(() => BookingPassengerItemDto)
+  passengers: BookingPassengerItemDto[];
 }

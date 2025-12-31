@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Bus } from './bus.entity';
+import { Bus, BusType } from './bus.entity';
 import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
 import { UpdateBusSeatMapDto } from './dto/update-bus-seat-map.dto';
@@ -40,8 +40,8 @@ export class BusesService {
     const seatMap = await this.resolveSeatMap(dto.seatMapId);
     const bus = this.busRepo.create({
       name: dto.name,
-      plateNumber: dto.plateNumber,
-      busType: dto.busType || 'STANDARD',
+      plateNumber: dto.plateNumber.trim().toUpperCase(),
+      busType: dto.busType ?? BusType.SEATER,
       amenities: dto.amenities || [],
       seatMap: seatMap ?? null,
     });
@@ -52,7 +52,7 @@ export class BusesService {
     const bus = await this.busRepo.findOne({ where: { id } });
     if (!bus) throw new NotFoundException('Bus not found');
     if (dto.name) bus.name = dto.name;
-    if (dto.plateNumber) bus.plateNumber = dto.plateNumber;
+    if (dto.plateNumber) bus.plateNumber = dto.plateNumber.trim().toUpperCase();
     if (dto.busType) bus.busType = dto.busType;
     if (dto.amenities !== undefined) bus.amenities = dto.amenities;
     return this.busRepo.save(bus);

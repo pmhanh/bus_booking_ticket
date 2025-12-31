@@ -12,21 +12,26 @@ export type PassengerForm = {
 
 type SeatSelection = { code: string; price?: number };
 type ContactInfo = { name: string; email?: string; phone: string };
-type LockInfo = { token: string; expiresAt: string | null } | null;
+export type HoldState = {
+  lockToken: string;
+  seatCodes: string[];
+  tripId: number;
+  expiresAt: string;
+} | null;
 
 type BookingContextValue = {
   trip: Trip | null;
   selectedSeats: SeatSelection[];
   passengers: PassengerForm[];
   contact: ContactInfo;
-  lockInfo: LockInfo;
   totalPrice: number;
+  hold: HoldState;
   setTrip: (trip: Trip | null) => void;
   toggleSeat: (seat: SeatSelection) => void;
   setSelectedSeats: (seats: SeatSelection[]) => void;
   updatePassenger: (seatCode: string, data: Partial<PassengerForm>) => void;
   setContact: (data: Partial<ContactInfo>) => void;
-  setLockInfo: (lock: LockInfo) => void;
+  setHold: (hold: HoldState) => void;
   clear: () => void;
 };
 
@@ -37,14 +42,14 @@ export const BookingProvider = ({ children }: PropsWithChildren) => {
   const [selectedSeats, setSelectedSeatsState] = useState<SeatSelection[]>([]);
   const [passengers, setPassengers] = useState<PassengerForm[]>([]);
   const [contact, setContactState] = useState<ContactInfo>({ name: '', phone: '' });
-  const [lockInfo, setLockInfoState] = useState<LockInfo>(null);
+  const [hold, setHoldState] = useState<HoldState>(null);
 
   const setTrip = useCallback((next: Trip | null) => {
     setTripState((prev) => {
       if (!next || prev?.id !== next.id) {
         setSelectedSeatsState([]);
         setPassengers([]);
-        setLockInfoState(null);
+        setHoldState(null);
       }
       return next;
     });
@@ -96,8 +101,8 @@ export const BookingProvider = ({ children }: PropsWithChildren) => {
     setContactState((prev) => ({ ...prev, ...data }));
   }, []);
 
-  const setLockInfo = useCallback((lock: LockInfo) => {
-    setLockInfoState(lock);
+  const setHold = useCallback((next: HoldState) => {
+    setHoldState(next);
   }, []);
 
   const clear = useCallback(() => {
@@ -105,7 +110,7 @@ export const BookingProvider = ({ children }: PropsWithChildren) => {
     setSelectedSeats([]);
     setPassengers([]);
     setContactState({ name: '', phone: '' });
-    setLockInfoState(null);
+    setHoldState(null);
   }, []);
 
   const totalPrice = useMemo(() => {
@@ -119,14 +124,14 @@ export const BookingProvider = ({ children }: PropsWithChildren) => {
       selectedSeats,
       passengers,
       contact,
-      lockInfo,
       totalPrice,
       setTrip,
       toggleSeat,
       setSelectedSeats,
       updatePassenger,
       setContact,
-      setLockInfo,
+      hold,
+      setHold,
       clear,
     }),
     [
@@ -134,14 +139,14 @@ export const BookingProvider = ({ children }: PropsWithChildren) => {
       selectedSeats,
       passengers,
       contact,
-      lockInfo,
       totalPrice,
       setTrip,
       toggleSeat,
       setSelectedSeats,
       updatePassenger,
       setContact,
-      setLockInfo,
+      hold,
+      setHold,
       clear,
     ],
   );

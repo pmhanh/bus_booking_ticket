@@ -44,7 +44,7 @@ export const AdminSeatMapsPage = () => {
         lookup.set(`${s.row}-${s.col}`, {
           code: s.code,
           isActive: s.isActive,
-          seatType: s.seatType || 'standard',
+          seatType: s.seatType || 'SEATER',
         }),
       );
       const next: SeatCell[] = [];
@@ -110,7 +110,7 @@ export const AdminSeatMapsPage = () => {
         lookup.set(`${s.row}-${s.col}`, {
           code: s.code,
           isActive: s.isActive,
-          seatType: s.seatType || 'standard',
+          seatType: s.seatType || 'SEATER',
         }),
       );
       const next: SeatCell[] = [];

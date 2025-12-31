@@ -461,10 +461,7 @@ export class BookingsService {
 
     // ---- After commit: websocket broadcast ----
     if (tripId && seatCodes.length) {
-      this.seatGateway.emitSeatsChanged(
-        tripId,
-        seatCodes.map((code) => ({ seatCode: code, status: 'booked' })),
-      );
+      this.seatGateway.emitSeatBooked(tripId, seatCodes);
     }
 
     this.trySendTicket(updated).catch(() => {});

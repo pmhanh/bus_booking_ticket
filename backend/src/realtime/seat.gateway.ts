@@ -25,11 +25,47 @@ export class SeatGateway {
     return `trip:${tripId}`;
   }
 
-  emitSeatsChanged(tripId: number, changes: SeatChange[]) {
-    this.server.to(this.room(tripId)).emit('trip_seats_changed', {
+  private emitTripEvent(tripId: number, payload: Record<string, unknown>) {
+    this.server.to(this.room(tripId)).emit('trip_seats_changed', payload);
+  }
+
+  emitSeatHeld(tripId: number, seatCodes: string[], expiresAt?: string) {
+    const at = new Date().toISOString();
+    this.server.to(this.room(tripId)).emit('seatHeld', { tripId, seatCodes, expiresAt, at });
+    this.emitTripEvent(tripId, {
       tripId,
-      changes,
-      at: new Date().toISOString(),
+      changes: seatCodes.map((seatCode) => ({
+        seatCode,
+        status: 'held',
+        expiresAt,
+      })),
+      at,
+    });
+  }
+
+  emitSeatReleased(tripId: number, seatCodes: string[]) {
+    const at = new Date().toISOString();
+    this.server.to(this.room(tripId)).emit('seatReleased', { tripId, seatCodes, at });
+    this.emitTripEvent(tripId, {
+      tripId,
+      changes: seatCodes.map((seatCode) => ({
+        seatCode,
+        status: 'released',
+      })),
+      at,
+    });
+  }
+
+  emitSeatBooked(tripId: number, seatCodes: string[]) {
+    const at = new Date().toISOString();
+    this.server.to(this.room(tripId)).emit('seatBooked', { tripId, seatCodes, at });
+    this.emitTripEvent(tripId, {
+      tripId,
+      changes: seatCodes.map((seatCode) => ({
+        seatCode,
+        status: 'booked',
+      })),
+      at,
     });
   }
 
@@ -40,5 +76,15 @@ export class SeatGateway {
   ) {
     if (!tripId) return;
     socket.join(this.room(Number(tripId)));
+  }
+
+  // alias camelCase per spec
+  @SubscribeMessage('joinTrip')
+  handleJoinTripAlias(
+    @MessageBody() data: { tripId: number },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    if (!data?.tripId) return;
+    socket.join(this.room(Number(data.tripId)));
   }
 }

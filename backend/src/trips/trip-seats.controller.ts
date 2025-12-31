@@ -11,4 +11,12 @@ export class TripSeatsController {
   ) {
     return this.tripSeatsService.getSeatMap(tripId);
   }
+
+  // Alias để FE lấy trạng thái ghế: /trips/:tripId/seats/status
+  @Get('seats/status')
+  getSeatStatus(
+    @Param('tripId', ParseIntPipe) tripId: number,
+  ) {
+    return this.tripSeatsService.getSeatMap(tripId);
+  }
 }

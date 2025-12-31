@@ -91,6 +91,7 @@ export const SeatMapView = ({
       cells.push(
         <button
           key={`${i}-${j}`}
+          type="button"
           className={clsx(
             'h-14 rounded-xl border text-sm font-semibold flex flex-col items-center justify-center transition-all duration-150 focus:outline-none',
             statusClass,

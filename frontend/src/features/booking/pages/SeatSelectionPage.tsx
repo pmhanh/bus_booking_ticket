@@ -16,7 +16,7 @@ const formatDate = (date: string) =>
   new Date(date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 const API_ORIGIN = (import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace(/\/api$/, "");
-const HOLD_TTL_SECONDS = 120;
+const HOLD_TTL_SECONDS = 15 * 60; // 15 minutes
 
 export const SeatSelectionPage = () => {
   const { id } = useParams();
@@ -219,24 +219,18 @@ export const SeatSelectionPage = () => {
     return () => clearInterval(timer);
   }, [hold, loadAvailability, setHold]);
 
-  // Poll status periodically to stay in sync even if no socket event
-  useEffect(() => {
-    if (!tripId) return;
-    const interval = setInterval(() => loadAvailability(false), 15000);
-    return () => clearInterval(interval);
-  }, [loadAvailability, tripId]);
+  // Không poll liên tục; chỉ refresh thủ công khi cần
 
   useEffect(() => {
     if (!tripId) return;
     const socket = io(`${API_ORIGIN}/ws`, { withCredentials: true });
     socketRef.current = socket;
-    socket.emit("join_trip", { tripId });
+    socket.emit("joinTrip", { tripId });
 
-    socket.on("trip_seats_changed", (payload: { tripId: number; changes: { seatCode: string; status: string; expiresAt?: string }[] }) => {
-      if (payload.tripId !== tripId) return;
+    const applyChanges = (changes: { seatCode: string; status: string; expiresAt?: string }[]) => {
       setAvailability((prev) => {
         if (!prev) return prev;
-        const changeMap = new Map(payload.changes.map((c) => [c.seatCode, c]));
+        const changeMap = new Map(changes.map((c) => [c.seatCode, c]));
         const nextSeats = prev.seats.map((seat) => {
           const change = changeMap.get(seat.code);
           if (!change) return seat;
@@ -250,6 +244,26 @@ export const SeatSelectionPage = () => {
         sanitizeSelection(next);
         return next;
       });
+    };
+
+    socket.on("seatHeld", (payload: { tripId: number; seatCodes: string[]; expiresAt?: string }) => {
+      if (payload.tripId !== tripId) return;
+      applyChanges(payload.seatCodes.map((seatCode) => ({ seatCode, status: "held", expiresAt: payload.expiresAt })));
+    });
+
+    socket.on("seatReleased", (payload: { tripId: number; seatCodes: string[] }) => {
+      if (payload.tripId !== tripId) return;
+      applyChanges(payload.seatCodes.map((seatCode) => ({ seatCode, status: "released" })));
+    });
+
+    socket.on("seatBooked", (payload: { tripId: number; seatCodes: string[] }) => {
+      if (payload.tripId !== tripId) return;
+      applyChanges(payload.seatCodes.map((seatCode) => ({ seatCode, status: "booked" })));
+    });
+
+    socket.on("trip_seats_changed", (payload: { tripId: number; changes: { seatCode: string; status: string; expiresAt?: string }[] }) => {
+      if (payload.tripId !== tripId) return;
+      applyChanges(payload.changes);
     });
 
     return () => {
@@ -266,6 +280,9 @@ export const SeatSelectionPage = () => {
   }, [releaseHold]);
 
   const validateForms = () => {
+    // clear stale errors before re-validating
+    setError(null);
+    setHoldError(null);
     const phoneRegex = /^[0-9]{9,11}$/;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const nextPassengerErrors: Record<string, { name?: string; phone?: string; idNumber?: string }> = {};

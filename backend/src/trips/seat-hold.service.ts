@@ -10,7 +10,7 @@ export class SeatHoldService {
     private readonly seatGateway: SeatGateway,
   ) {}
 
-  async holdSeats(tripId: number, seatCodes: string[], ttlSeconds = 120) {
+  async holdSeats(tripId: number, seatCodes: string[], ttlSeconds = 900) {
     if (!seatCodes?.length) throw new BadRequestException('seatCodes is required');
 
     // chống duplicate seatCode
@@ -32,10 +32,7 @@ export class SeatHoldService {
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
 
     // 🔔 broadcast held
-    this.seatGateway.emitSeatsChanged(
-      tripId,
-      uniq.map((seatCode) => ({ seatCode, status: 'held', expiresAt })),
-    );
+    this.seatGateway.emitSeatHeld(tripId, uniq, expiresAt);
 
     return { ok: true, tripId, seatCodes: uniq, lockToken, expiresAt };
   }
@@ -50,10 +47,7 @@ export class SeatHoldService {
     await this.seatLockService.unlockSeats(tripId, uniq, lockToken);
 
     // 🔔 broadcast released
-    this.seatGateway.emitSeatsChanged(
-      tripId,
-      uniq.map((seatCode) => ({ seatCode, status: 'released' })),
-    );
+    this.seatGateway.emitSeatReleased(tripId, uniq);
 
     return { ok: true };
   }

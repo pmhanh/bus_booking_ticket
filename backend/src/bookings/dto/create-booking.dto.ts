@@ -1,5 +1,6 @@
 import {
   ArrayNotEmpty,
+  IsDateString,
   IsArray,
   IsEmail,
   IsInt,
@@ -31,7 +32,6 @@ export class CreateBookingDto {
   @IsPositive()
   tripId: number;
 
-  // Redis lock token (sẽ dùng để verify quyền lock)
   @IsString()
   lockToken: string;
 
@@ -50,4 +50,7 @@ export class CreateBookingDto {
   @ValidateNested({ each: true })
   @Type(() => BookingPassengerItemDto)
   passengers: BookingPassengerItemDto[];
+
+  @IsDateString()
+  holdExpiresAt: string;
 }

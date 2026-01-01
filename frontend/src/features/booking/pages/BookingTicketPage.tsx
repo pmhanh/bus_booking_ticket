@@ -48,8 +48,8 @@ export const BookingTicketPage = () => {
   if (!booking) return null;
 
   const { trip } = booking;
-  const departure = new Date(trip.departureTime).toLocaleString();
-  const arrival = new Date(trip.arrivalTime).toLocaleString();
+  const departure = trip?.departureTime ? new Date(trip.departureTime).toLocaleString() : '';
+  const arrival = trip?.arrivalTime ? new Date(trip.arrivalTime).toLocaleString() : '';
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
@@ -92,21 +92,21 @@ export const BookingTicketPage = () => {
         <div className="grid md:grid-cols-[1.1fr_0.9fr] gap-0">
           <div className="p-6 space-y-3 border-r border-white/10">
             <div className="flex items-center gap-3 text-white text-xl font-semibold">
-              <span>{trip.route.originCity.name}</span>
-              <span className="text-gray-500">→</span>
-              <span>{trip.route.destinationCity.name}</span>
+              <span>{trip?.route?.originCity?.name || 'N/A'}</span>
+              <span className="text-gray-500">{"->"}</span>
+              <span>{trip?.route?.destinationCity?.name || 'N/A'}</span>
             </div>
             <div className="grid sm:grid-cols-2 gap-3 text-sm text-gray-200">
-              <InfoBox label="Gio di" value={departure} />
-              <InfoBox label="Gio den du kien" value={arrival} />
-              <InfoBox label="Xe" value={trip.bus.name} sub={trip.bus.plateNumber} />
+              <InfoBox label="Gio di" value={departure || 'N/A'} />
+              <InfoBox label="Gio den du kien" value={arrival || 'N/A'} />
+              <InfoBox label="Xe" value={trip?.bus?.name || 'N/A'} sub={trip?.bus?.plateNumber} />
               <InfoBox label="Ma dat cho" value={booking.reference || booking.id} sub={booking.status} />
             </div>
 
             <div className="mt-4 space-y-2">
               <div className="text-xs uppercase text-gray-400">Hành khách</div>
               <div className="space-y-2">
-                {booking.passengers.map((p) => {
+                {(booking.passengers || []).map((p) => {
                   const price = p.price ?? trip?.basePrice ?? 0;
                   return (
                     <div
@@ -116,7 +116,7 @@ export const BookingTicketPage = () => {
                       <div>
                         <div className="font-semibold">{p.name || "Khach"}</div>
                         <div className="text-xs text-gray-300">
-                          Ghe {p.seatCode} • {p.phone || ""} • {p.idNumber || ""}
+                          Ghe {p.seatCode} · {p.phone || ""} · {p.idNumber || ""}
                         </div>
                       </div>
                       <div className="text-emerald-100 font-semibold">{price.toLocaleString()} đ</div>

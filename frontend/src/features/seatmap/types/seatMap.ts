@@ -23,6 +23,7 @@ export type SeatMap = {
 export type SeatWithState = SeatDefinition & {
   status: SeatStatus;
   expiresAt?: string | null;
+  price?: number;
 };
 
 export type SeatAvailability = {

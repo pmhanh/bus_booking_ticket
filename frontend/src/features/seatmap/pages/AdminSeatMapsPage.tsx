@@ -43,6 +43,7 @@ export const AdminSeatMapsPage = () => {
       seats?.forEach((s) =>
         lookup.set(`${s.row}-${s.col}`, {
           code: s.code,
+          price: (s as any).price ?? 0,
           isActive: s.isActive,
           seatType: s.seatType || 'SEATER',
         }),
@@ -109,6 +110,7 @@ export const AdminSeatMapsPage = () => {
       seats?.forEach((s) =>
         lookup.set(`${s.row}-${s.col}`, {
           code: s.code,
+          price: (s as any).price ?? 0,
           isActive: s.isActive,
           seatType: s.seatType || 'SEATER',
         }),
@@ -173,6 +175,7 @@ export const AdminSeatMapsPage = () => {
         row: c.row,
         col: c.col,
         seatType: c.seatType || 'standard',
+        price: 0,
         isActive: true,
       }));
     if (!seatsPayload.length) {

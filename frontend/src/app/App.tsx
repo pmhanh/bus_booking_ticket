@@ -21,6 +21,8 @@ import { BookingReviewPage } from '../features/booking/pages/BookingReviewPage';
 import { BookingTicketPage } from '../features/booking/pages/BookingTicketPage';
 import { BookingsPage } from '../features/booking/pages/BookingsPage';
 import { SeatSelectionPage } from '../features/booking/pages/SeatSelectionPage';
+import { BookingPassengersPage } from '../features/booking/pages/BookingPassengersPage';
+import { StripeCancelPage, StripeSuccessPage } from '../features/payments/pages/StripeResultPage';
 
 function App() {
   const { status } = useAuth();
@@ -47,6 +49,7 @@ function App() {
         <Route path="/reset" element={<ResetPasswordPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/bookings" element={<BookingsPage />} />
+        <Route path="/bookings/passengers" element={<BookingPassengersPage />} />
         <Route path="/bookings/review" element={<BookingReviewPage />} />
         <Route path="/bookings/:id/ticket" element={<BookingTicketPage />} />
 
@@ -61,6 +64,10 @@ function App() {
           <Route path="/admin/routes" element={<AdminRoutesPage />} />
           <Route path="/admin/seat-maps" element={<AdminSeatMapsPage />} />
         </Route>
+
+        <Route path="/payments/stripe/success" element={<StripeSuccessPage />} />
+        <Route path="/payments/stripe/cancel" element={<StripeCancelPage />} />
+
       </Routes>
     </AppShell>
   );

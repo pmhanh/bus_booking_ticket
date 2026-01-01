@@ -1,152 +1,135 @@
-import type { PropsWithChildren } from 'react';
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import type { Trip } from '../../trip/types/trip';
+import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 
-export type PassengerForm = {
-  seatCode: string;
-  name: string;
-  phone?: string;
-  idNumber?: string;
-  price?: number;
-};
+export type SelectedSeat = { code: string; price: number };
 
-type SeatSelection = { code: string; price?: number };
-type ContactInfo = { name: string; email?: string; phone: string };
 export type HoldState = {
+  tripId: number;
   lockToken: string;
   seatCodes: string[];
-  tripId: number;
-  expiresAt: string;
-} | null;
+  expiresAt: string; // ISO string
+};
+
+export type Contact = {
+  name: string;
+  email: string;
+  phone: string;
+};
+
+export type Passenger = {
+  seatCode: string;
+  name: string;
+  phone: string;
+  idNumber: string;
+};
+
+type TripLike = any;
 
 type BookingContextValue = {
-  trip: Trip | null;
-  selectedSeats: SeatSelection[];
-  passengers: PassengerForm[];
-  contact: ContactInfo;
+  trip: TripLike | null;
+  setTrip: (trip: TripLike | null) => void;
+
+  selectedSeats: SelectedSeat[];
+  setSelectedSeats: React.Dispatch<React.SetStateAction<SelectedSeat[]>>;
+
+  hold: HoldState | null;
+  setHold: (hold: HoldState | null) => void;
+
+  passengers: Passenger[];
+  setPassengers: React.Dispatch<React.SetStateAction<Passenger[]>>;
+  initPassengersFromSeats: (seatCodes: string[]) => void;
+  updatePassenger: (seatCode: string, data: Partial<Omit<Passenger, "seatCode">>) => void;
+
+  contact: Contact;
+  setContact: (data: Partial<Contact>) => void;
+
   totalPrice: number;
-  hold: HoldState;
-  setTrip: (trip: Trip | null) => void;
-  toggleSeat: (seat: SeatSelection) => void;
-  setSelectedSeats: (seats: SeatSelection[]) => void;
-  updatePassenger: (seatCode: string, data: Partial<PassengerForm>) => void;
-  setContact: (data: Partial<ContactInfo>) => void;
-  setHold: (hold: HoldState) => void;
+
   clear: () => void;
 };
 
-const BookingContext = createContext<BookingContextValue | undefined>(undefined);
+const BookingContext = createContext<BookingContextValue | null>(null);
 
-export const BookingProvider = ({ children }: PropsWithChildren) => {
-  const [trip, setTripState] = useState<Trip | null>(null);
-  const [selectedSeats, setSelectedSeatsState] = useState<SeatSelection[]>([]);
-  const [passengers, setPassengers] = useState<PassengerForm[]>([]);
-  const [contact, setContactState] = useState<ContactInfo>({ name: '', phone: '' });
-  const [hold, setHoldState] = useState<HoldState>(null);
+const EMPTY_CONTACT: Contact = { name: "", email: "", phone: "" };
 
-  const setTrip = useCallback((next: Trip | null) => {
-    setTripState((prev) => {
-      if (!next || prev?.id !== next.id) {
-        setSelectedSeatsState([]);
-        setPassengers([]);
-        setHoldState(null);
-      }
-      return next;
-    });
+export const BookingProvider = ({ children }: { children: React.ReactNode }) => {
+  const [trip, _setTrip] = useState<TripLike | null>(null);
+  const [selectedSeats, setSelectedSeats] = useState<SelectedSeat[]>([]);
+  const [hold, _setHold] = useState<HoldState | null>(null);
+  const [passengers, setPassengers] = useState<Passenger[]>([]);
+  const [contact, _setContact] = useState<Contact>(EMPTY_CONTACT);
+
+  const setTrip = useCallback((t: TripLike | null) => _setTrip(t), []);
+
+  const setHold = useCallback((h: HoldState | null) => {
+    _setHold(h);
   }, []);
 
-  const toggleSeat = useCallback((seat: SeatSelection) => {
-    setSelectedSeatsState((prev) => {
-      const exists = prev.some((s) => s.code === seat.code);
-      if (exists) {
-        setPassengers((ps) => ps.filter((p) => p.seatCode !== seat.code));
-        return prev.filter((s) => s.code !== seat.code);
-      }
-      setPassengers((ps) => {
-        const next = [...ps, { seatCode: seat.code, name: '', price: seat.price }];
-        const uniq = new Map(next.map((p) => [p.seatCode, p]));
-        return Array.from(uniq.values());
-      });
-      return [...prev, seat];
-    });
+  const initPassengersFromSeats = useCallback((seatCodes: string[]) => {
+    setPassengers(
+      seatCodes.map((seatCode) => ({
+        seatCode,
+        name: "",
+        phone: "",
+        idNumber: "",
+      })),
+    );
   }, []);
 
-  const setSelectedSeats = useCallback((seats: SeatSelection[]) => {
-    const unique = Array.from(new Map(seats.map((s) => [s.code, s])).values());
-    setSelectedSeatsState(unique);
-    setPassengers((prev) => {
-      const existing = new Map(prev.map((p) => [p.seatCode, p]));
-      return unique.map((seat) => {
-        const found = existing.get(seat.code);
-        return {
-          seatCode: seat.code,
-          name: found?.name || '',
-          phone: found?.phone,
-          idNumber: found?.idNumber,
-          price: seat.price ?? found?.price,
-        };
-      });
-    });
-  }, []);
+  const updatePassenger = useCallback(
+    (seatCode: string, data: Partial<Omit<Passenger, "seatCode">>) => {
+      setPassengers((prev) =>
+        prev.map((p) => (p.seatCode === seatCode ? { ...p, ...data } : p)),
+      );
+    },
+    [],
+  );
 
-  const updatePassenger = useCallback((seatCode: string, data: Partial<PassengerForm>) => {
-    setPassengers((prev) => {
-      const exists = prev.find((p) => p.seatCode === seatCode);
-      if (!exists) return prev;
-      return prev.map((p) => (p.seatCode === seatCode ? { ...p, ...data } : p));
-    });
-  }, []);
-
-  const setContact = useCallback((data: Partial<ContactInfo>) => {
-    setContactState((prev) => ({ ...prev, ...data }));
-  }, []);
-
-  const setHold = useCallback((next: HoldState) => {
-    setHoldState(next);
-  }, []);
-
-  const clear = useCallback(() => {
-    setTripState(null);
-    setSelectedSeats([]);
-    setPassengers([]);
-    setContactState({ name: '', phone: '' });
-    setHoldState(null);
+  const setContact = useCallback((data: Partial<Contact>) => {
+    _setContact((prev) => ({ ...prev, ...data }));
   }, []);
 
   const totalPrice = useMemo(() => {
-    const base = trip?.basePrice ?? 0;
-    return passengers.reduce((sum, p) => sum + (p.price ?? base), 0);
-  }, [passengers, trip?.basePrice]);
+    // Bạn đang tính total theo selectedSeats, OK
+    return selectedSeats.reduce((sum, s) => sum + (s.price || 0), 0);
+  }, [selectedSeats]);
+
+  const clear = useCallback(() => {
+    _setTrip(null);
+    setSelectedSeats([]);
+    _setHold(null);
+    setPassengers([]);
+    _setContact(EMPTY_CONTACT);
+  }, []);
 
   const value: BookingContextValue = useMemo(
     () => ({
       trip,
-      selectedSeats,
-      passengers,
-      contact,
-      totalPrice,
       setTrip,
-      toggleSeat,
+      selectedSeats,
       setSelectedSeats,
-      updatePassenger,
-      setContact,
       hold,
       setHold,
+      passengers,
+      setPassengers,
+      initPassengersFromSeats,
+      updatePassenger,
+      contact,
+      setContact,
+      totalPrice,
       clear,
     }),
     [
       trip,
-      selectedSeats,
-      passengers,
-      contact,
-      totalPrice,
       setTrip,
-      toggleSeat,
-      setSelectedSeats,
-      updatePassenger,
-      setContact,
+      selectedSeats,
       hold,
       setHold,
+      passengers,
+      initPassengersFromSeats,
+      updatePassenger,
+      contact,
+      setContact,
+      totalPrice,
       clear,
     ],
   );
@@ -156,6 +139,6 @@ export const BookingProvider = ({ children }: PropsWithChildren) => {
 
 export const useBooking = () => {
   const ctx = useContext(BookingContext);
-  if (!ctx) throw new Error('useBooking must be used inside BookingProvider');
+  if (!ctx) throw new Error("useBooking must be used within BookingProvider");
   return ctx;
 };

@@ -109,7 +109,6 @@ export const BookingsPage = () => {
           contactName: editContact.name,
           contactPhone: editContact.phone,
           contactEmail: editContact.email,
-          seats: editPassengers.map((p) => p.seatCode),
           passengers: editPassengers.map((p) => ({
             seatCode: p.seatCode,
             name: p.name,
@@ -280,12 +279,12 @@ const BookingRow = ({
   <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
     <div className="space-y-1">
       <div className="flex items-center gap-2 text-white font-semibold">
-        <span>{booking.trip.route.originCity.name}</span>
-        <span className="text-gray-500">{'→'}</span>
-        <span>{booking.trip.route.destinationCity.name}</span>
+        <span>{booking.trip?.route?.originCity?.name || 'N/A'}</span>
+        <span className="text-gray-500">{"->"}</span>
+        <span>{booking.trip?.route?.destinationCity?.name || 'N/A'}</span>
       </div>
       <div className="text-xs text-gray-400">
-        {new Date(booking.trip.departureTime).toLocaleString()} · Ghế: {booking.passengers.map((p) => p.seatCode).join(', ')}
+        {booking.trip?.departureTime ? new Date(booking.trip.departureTime).toLocaleString() : 'No departure time'} · Ghế: {(booking.passengers || []).map((p) => p.seatCode).join(', ')}
       </div>
       <div className="text-xs text-emerald-200">Mã: {booking.reference || booking.id}</div>
     </div>

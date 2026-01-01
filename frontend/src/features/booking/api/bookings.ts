@@ -4,25 +4,39 @@ import type { Booking, PassengerInput, SeatStatusResponse } from '../types/booki
 export type CreateBookingPayload = {
   tripId: number;
   contactName: string;
-  contactEmail?: string;
+  contactEmail: string;
   contactPhone?: string;
-  seats: string[];
-  passengers?: PassengerInput[];
-  lockToken?: string;
+  passengers: PassengerInput[];
+  lockToken: string;
+  holdExpiresAt: string;
 };
 
 export async function getSeatStatus(tripId: number) {
   return apiClient<SeatStatusResponse>(`/bookings/trips/${tripId}/seats`, { method: 'GET' });
 }
 
+export type CreateBookingResponse = {
+  ok: true;
+  booking: Booking;
+};
+
 export async function createBooking(payload: CreateBookingPayload, token?: string | null) {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-  return apiClient<Booking>('/bookings', {
+  return apiClient<CreateBookingResponse>('/bookings', {
     method: 'POST',
     headers,
     body: JSON.stringify(payload),
   });
 }
+
+// export async function createBooking(payload: CreateBookingPayload, token?: string | null) {
+//   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+//   return apiClient<Booking>('/bookings', {
+//     method: 'POST',
+//     headers,
+//     body: JSON.stringify(payload),
+//   });
+// }
 
 export async function getMyBookings(token: string) {
   return apiClient<Booking[]>('/bookings/my', {

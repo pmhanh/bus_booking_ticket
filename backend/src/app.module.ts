@@ -17,6 +17,7 @@ import { Bus } from './buses/bus.entity';
 import { Trip } from './trips/trip.entity';
 import { Booking } from './bookings/booking.entity';
 import { BookingDetail } from './bookings/booking-detail.entity';
+import { Payment } from './payments/entities/payment.entity';
 import { CitiesModule } from './cities/cities.module';
 import { RoutesModule } from './routes/routes.module';
 import { SeatMapsModule } from './seat-maps/seat-maps.module';
@@ -25,6 +26,7 @@ import { TripsModule } from './trips/trips.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { TripSeat } from './trips/trip-seat.entity';
 import { RealtimeModule } from './realtime/realtime.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -53,6 +55,7 @@ import { RealtimeModule } from './realtime/realtime.module';
             Booking,
             BookingDetail,
             TripSeat,
+            Payment,
           ],
           synchronize: true,
         };
@@ -67,7 +70,8 @@ import { RealtimeModule } from './realtime/realtime.module';
     BusesModule,
     TripsModule,
     BookingsModule,
-    RealtimeModule
+    RealtimeModule,
+    PaymentsModule
   ],
   controllers: [AppController],
   providers: [AppService],

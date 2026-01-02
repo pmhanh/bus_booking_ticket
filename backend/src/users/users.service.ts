@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { User } from './user.entity';
+import { User, UserStatus } from './user.entity';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -14,11 +14,46 @@ export class UsersService {
   ) {}
 
   findByEmail(email: string) {
-    return this.repo.findOne({ where: { email } });
+    return this.repo.findOne({ 
+      where: { email },
+      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'phone'] });
+  }
+
+  findByEmailWithPassword(email: string) {
+    return this.repo.findOne({
+      where: { email },
+      select: [
+        'id',
+        'email',
+        'fullName',
+        'role',
+        'status',
+        'verified',
+        'passwordHash',
+        'phone'
+      ],
+    });
   }
 
   findById(id: string) {
-    return this.repo.findOne({ where: { id } });
+    return this.repo.findOne({ 
+      where: { id },
+      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'phone'] 
+    });
+  }
+
+  findByIdWithPassword(id: string) {
+    return this.repo.findOne({
+      where: { id },
+      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'passwordHash', 'phone'],
+    });
+  }
+
+  findByIdWithRefreshToken(id: string) {
+    return this.repo.findOne({
+      where: { id },
+      select: ['id', 'email', 'role', 'refreshTokenHash', 'phone'],
+    });
   }
 
   async createLocal(dto: CreateUserDto) {
@@ -29,12 +64,17 @@ export class UsersService {
       fullName: dto.fullName,
       provider: 'local',
       verified: false,
+      status: 'pending',
     });
     return this.repo.save(user);
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    await this.repo.update(userId, { ...dto });
+    console.log('dto=', dto);
+    //await this.repo.update(userId, { ...dto });
+    //return this.findById(userId);
+    const result = await this.repo.update(userId, { ...dto });
+    console.log('affected=', result.affected);
     return this.findById(userId);
   }
 
@@ -43,8 +83,9 @@ export class UsersService {
     await this.repo.update(userId, { passwordHash });
   }
 
-  async verifyUser(userId: string) {
-    await this.repo.update(userId, { verified: true });
+  async verifyUser(userId: string, currentStatus?: UserStatus) {
+    const nextStatus = currentStatus === 'banned' ? currentStatus : 'active';
+    await this.repo.update(userId, { verified: true, status: nextStatus });
     return this.findById(userId);
   }
 
@@ -55,17 +96,6 @@ export class UsersService {
 
   async clearRefreshToken(userId: string) {
     await this.repo.update(userId, { refreshTokenHash: null });
-  }
-
-  async updateFailedAttempts(
-    userId: string,
-    attempts: number,
-    lockedUntil?: Date | null,
-  ) {
-    await this.repo.update(userId, {
-      failedLoginAttempts: attempts,
-      lockedUntil: lockedUntil ?? undefined,
-    });
   }
 
   async createFromProvider(email: string, profile: Partial<User>) {
@@ -84,6 +114,7 @@ export class UsersService {
       provider: 'google',
       verified: true,
       role: 'user',
+      status: 'active',
       ...profile,
     });
     return this.repo.save(user);
@@ -101,7 +132,7 @@ export class UsersService {
     return qb.orderBy('user.createdAt', 'DESC').getMany();
   }
 
-  async updateStatus(userId: string, status: 'active' | 'suspended') {
+  async updateStatus(userId: string, status: UserStatus) {
     await this.repo.update(userId, { status });
     return this.findById(userId);
   }

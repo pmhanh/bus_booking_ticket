@@ -4,11 +4,13 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
 import { Trip } from '../trips/trip.entity';
+import { BookingDetail } from './booking-detail.entity';
 
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'EXPIRED';
 
@@ -25,9 +27,6 @@ export class Booking {
   @JoinColumn({ name: 'trip_id' })
   trip: Trip;
 
-  @Column({ type: 'text', array: true })
-  seats: string[];
-
   @Column({ nullable: true })
   userId?: string;
 
@@ -40,9 +39,6 @@ export class Booking {
   @Column({ nullable: true })
   contactPhone?: string;
 
-  @Column({ type: 'jsonb', nullable: true })
-  passengers?: Array<{ name: string; phone?: string; idNumber?: string; seatCode?: string }>;
-
   @Column({ type: 'int' })
   totalPrice: number;
 
@@ -51,6 +47,12 @@ export class Booking {
 
   @Column({ type: 'timestamptz', nullable: true })
   expiresAt?: Date | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  lockToken?: string | null;
+
+  @OneToMany(() => BookingDetail, (d) => d.booking, { cascade: true })
+  details: BookingDetail[];
 
   @CreateDateColumn()
   createdAt: Date;

@@ -7,6 +7,14 @@ import {
 } from 'typeorm';
 import { SeatMap } from '../seat-maps/seat-map.entity';
 
+export enum BusType {
+  SEATER = 'SEATER',
+  SLEEPER = 'SLEEPER',
+  VIP = 'VIP',
+  LIMOUSINE = 'LIMOUSINE',
+}
+
+
 @Entity({ name: 'buses' })
 export class Bus {
   @PrimaryGeneratedColumn()
@@ -18,8 +26,8 @@ export class Bus {
   @Column({ unique: true })
   plateNumber: string;
 
-  @Column({ type: 'varchar', default: 'STANDARD' })
-  busType: string;
+  @Column({ type: 'enum', enum: BusType, default: BusType.SEATER })
+  busType: BusType;
 
   @Column('text', { array: true, default: '{}' })
   amenities: string[];

@@ -71,14 +71,23 @@ export class RoutesService {
   async update(id: number, dto: UpdateRouteDto) {
     const route = await this.routesRepo.findOne({ where: { id } });
     if (!route) throw new NotFoundException('Route not found');
-    if (
-      dto.originCityId &&
-      dto.destinationCityId &&
-      dto.originCityId === dto.destinationCityId
-    )
-      throw new BadRequestException(
-        'Điểm đi và điểm đến không được trùng nhau',
-      );
+    // if (
+    //   dto.originCityId &&
+    //   dto.destinationCityId &&
+    //   dto.originCityId === dto.destinationCityId
+    // )
+    //   throw new BadRequestException(
+    //     'Điểm đi và điểm đến không được trùng nhau',
+    //   );
+    const currentOriginId = route.originCity.id;
+    const currentDestinationId = route.destinationCity.id;
+
+    const nextOriginId = dto.originCityId ?? currentOriginId;
+    const nextDestinationId = dto.destinationCityId ?? currentDestinationId;
+
+    if (nextOriginId === nextDestinationId) {
+      throw new BadRequestException('Điểm đi và điểm đến không được trùng nhau');
+    }
     if (dto.originCityId || dto.destinationCityId) {
       const ids = [dto.originCityId, dto.destinationCityId].filter(
         Boolean,

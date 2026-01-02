@@ -31,3 +31,4 @@ export class Route {
   @OneToMany(() => RouteStop, (stop) => stop.route, { cascade: true })
   stops: RouteStop[];
 }
+

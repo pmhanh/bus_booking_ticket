@@ -1,25 +1,5 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseIntPipe,
-  Patch,
-  Post,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
-import type { Request } from 'express';
+import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { TripSeatsService } from './trip-seats.service';
-import { LockSeatsDto } from './dto/lock-seats.dto';
-import { RefreshLockDto } from './dto/refresh-lock.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { JwtPayload } from '../auth/interfaces/jwt-payload';
-import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
-
-type AuthedRequest = Request & { user?: JwtPayload };
 
 @Controller('trips/:tripId')
 export class TripSeatsController {
@@ -28,100 +8,15 @@ export class TripSeatsController {
   @Get('seat-map')
   getSeatMap(
     @Param('tripId', ParseIntPipe) tripId: number,
-    @Query('lockToken') lockToken?: string,
   ) {
-    return this.tripSeatsService.getSeatMap(tripId, lockToken);
+    return this.tripSeatsService.getSeatMap(tripId);
   }
 
-  @UseGuards(OptionalJwtAuthGuard)
-  @Post('seat-locks')
-  lockSeats(
+  // Alias để FE lấy trạng thái ghế: /trips/:tripId/seats/status
+  @Get('seats/status')
+  getSeatStatus(
     @Param('tripId', ParseIntPipe) tripId: number,
-    @Body() dto: LockSeatsDto,
-    @Req() req: AuthedRequest,
   ) {
-    const user = req.user as JwtPayload | undefined;
-    return this.tripSeatsService.lockSeats(tripId, dto, user?.sub);
-  }
-
-  @UseGuards(OptionalJwtAuthGuard)
-  @Post('locks')
-  lockSeatsAlias(
-    @Param('tripId', ParseIntPipe) tripId: number,
-    @Body() dto: LockSeatsDto,
-    @Req() req: AuthedRequest,
-  ) {
-    const user = req.user as JwtPayload | undefined;
-    return this.tripSeatsService.lockSeats(tripId, dto, user?.sub);
-  }
-
-  @UseGuards(OptionalJwtAuthGuard)
-  @Patch('seat-locks/:token')
-  refreshLock(
-    @Param('tripId', ParseIntPipe) tripId: number,
-    @Param('token') token: string,
-    @Body() dto: RefreshLockDto,
-    @Req() req: AuthedRequest,
-  ) {
-    const user = req.user as JwtPayload | undefined;
-    return this.tripSeatsService.refreshLock(
-      tripId,
-      token,
-      dto,
-      user?.sub,
-      dto.guestSessionId,
-    );
-  }
-
-  @UseGuards(OptionalJwtAuthGuard)
-  @Patch('locks/:token')
-  refreshLockAlias(
-    @Param('tripId', ParseIntPipe) tripId: number,
-    @Param('token') token: string,
-    @Body() dto: RefreshLockDto,
-    @Req() req: AuthedRequest,
-  ) {
-    const user = req.user as JwtPayload | undefined;
-    return this.tripSeatsService.refreshLock(
-      tripId,
-      token,
-      dto,
-      user?.sub,
-      dto.guestSessionId,
-    );
-  }
-
-  @UseGuards(OptionalJwtAuthGuard)
-  @Delete('seat-locks/:token')
-  releaseLock(
-    @Param('tripId', ParseIntPipe) tripId: number,
-    @Param('token') token: string,
-    @Req() req: AuthedRequest,
-    @Query('guestSessionId') guestSessionId?: string,
-  ) {
-    const user = req.user as JwtPayload | undefined;
-    return this.tripSeatsService.releaseLock(
-      tripId,
-      token,
-      user?.sub,
-      guestSessionId,
-    );
-  }
-
-  @UseGuards(OptionalJwtAuthGuard)
-  @Delete('locks/:token')
-  releaseLockAlias(
-    @Param('tripId', ParseIntPipe) tripId: number,
-    @Param('token') token: string,
-    @Req() req: AuthedRequest,
-    @Query('guestSessionId') guestSessionId?: string,
-  ) {
-    const user = req.user as JwtPayload | undefined;
-    return this.tripSeatsService.releaseLock(
-      tripId,
-      token,
-      user?.sub,
-      guestSessionId,
-    );
+    return this.tripSeatsService.getSeatMap(tripId);
   }
 }

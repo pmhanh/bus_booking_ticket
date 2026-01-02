@@ -22,11 +22,10 @@ Monorepo with **frontend (Vite + React + Tailwind)** and **backend (NestJS + Pos
 
 - **Email/Password**: `POST /api/auth/register` and `POST /api/auth/login` (bcrypt hashed). Account lockout after 5 failed attempts for 15 minutes.
 - **Tokens**: Access JWT (15m) + Refresh JWT (7d). Refresh tokens are hashed on the user record; `/api/auth/refresh` exchanges them.
-- **Social login (popup)**: `/api/auth/google/start` + `/api/auth/google/callback` used by the frontend popup. (Remove `POST /api/auth/google` if not implemented.)
+- **Social login (popup)**: `/api/auth/google/start` + `/api/auth/google/callback` used by the frontend popup.
 - **Password reset**: `/api/auth/forgot` issues a 1h reset token (JWT) and logs it (replace with email service). `/api/auth/reset` applies the change and clears refresh tokens. `/api/auth/change-password` for logged-in users.
 - **Email verification**: `/api/auth/verify-request` emits a 1h verification token (logged for now). `/api/auth/verify` marks the user as verified.
 - **Authorization**: Role-based (`admin | agent | user`) enforced on client routes and server guards (e.g., `/api/admin/users`, `/api/dashboard/admin-metrics`). UI: Dashboard link/admin pages hidden from non-admins; admin is redirected away from user Home.
-- **Storage choice**: Short-lived access token in memory; refresh token + userId optionally persisted when “Remember me” is checked. Explains risk trade-off; safer storage via httpOnly cookie can be added later.
 
 ## Design System & Layout
 

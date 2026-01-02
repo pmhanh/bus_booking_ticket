@@ -49,7 +49,7 @@ export class TripsController {
 
   @Get(':id')
   get(@Param('id', ParseIntPipe) id: number) {
-    return this.tripsService.findById(id);
+    return this.tripsService.findPublicById(id);
   }
 
   @Patch(':id')

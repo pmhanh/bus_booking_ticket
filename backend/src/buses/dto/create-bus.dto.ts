@@ -1,4 +1,6 @@
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsIn, IsInt, IsOptional, IsString } from 'class-validator';
+import { BusType } from '../bus.entity';
 
 export class CreateBusDto {
   @IsString()
@@ -8,11 +10,13 @@ export class CreateBusDto {
   plateNumber: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
   seatMapId?: number | null;
 
   @IsOptional()
-  @IsString()
-  busType?: string;
+  @IsIn(Object.values(BusType))
+  busType?: BusType;
 
   @IsOptional()
   @IsArray()

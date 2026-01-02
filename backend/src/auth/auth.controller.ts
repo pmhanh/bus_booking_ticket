@@ -8,6 +8,7 @@ import {
   UseGuards,
   Query,
   Res,
+  Req,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from '../users/dto/create-user.dto';
@@ -18,12 +19,11 @@ import type { JwtPayload } from './interfaces/jwt-payload';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { GoogleLoginDto } from './dto/google-login.dto';
 import { UpdateProfileDto } from '../users/dto/update-profile.dto';
 import { UsersService } from '../users/users.service';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { VerifyRequestDto } from './dto/verify-request.dto';
-import type { Response } from 'express';
+import type { Response, Request, CookieOptions } from 'express';
 import { ConfigService } from '@nestjs/config';
 
 @Controller('auth')
@@ -34,6 +34,17 @@ export class AuthController {
     private readonly configService: ConfigService,
   ) {}
 
+  private getRefreshCookieOptions(): CookieOptions {
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    return {
+      httpOnly: true,
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/api/auth',
+    };
+  }
+
   @Post('register')
   register(@Body() dto: CreateUserDto) {
     return this.authService.register(dto);
@@ -41,20 +52,30 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
-  }
-
-  @Post('google')
-  @HttpCode(200)
-  google(@Body() dto: GoogleLoginDto) {
-    return this.authService.googleLogin(dto);
+  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.login(dto);
+    this.setRefreshCookie(res, result.tokens.refreshToken);
+    return { user: result.user, accessToken: result.tokens.accessToken };
   }
 
   @Post('refresh')
-  refresh(@Body() body: { refreshToken: string; userId: string }) {
-    return this.authService.refresh(body.userId, body.refreshToken);
+  @HttpCode(200)
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const token = req.cookies?.refresh_token as string | undefined;
+    if (!token) return { accessToken: null };
+    const result = await this.authService.refresh(token);
+    this.setRefreshCookie(res, result.refreshToken);
+    return { accessToken: result.accessToken };
   }
+
+  @Post('logout')
+  @HttpCode(200)
+  async logout(@Req() req: Request, @Res() res: Response) {
+    const cookieOptions = this.getRefreshCookieOptions();
+    res.clearCookie('refresh_token', { ...cookieOptions, maxAge: 0 });
+    return res.json({ message: 'Logged out' });
+  }
+
 
   @Post('forgot')
   forgot(@Body() dto: ForgotPasswordDto) {
@@ -87,7 +108,10 @@ export class AuthController {
     const result = await this.authService.handleGoogleOAuthCode(code);
     const frontendUrl =
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
-    const payload = encodeURIComponent(JSON.stringify(result));
+    const payload = encodeURIComponent(
+      JSON.stringify({ user: result.user, accessToken: result.tokens.accessToken }),
+    );
+    this.setRefreshCookie(res, result.tokens.refreshToken);
     const html = `<script>
       const data = JSON.parse(decodeURIComponent('${payload}'));
       if (window.opener) {
@@ -123,5 +147,9 @@ export class AuthController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.usersService.updateProfile(user.sub, dto);
+  }
+
+  private setRefreshCookie(res: Response, token: string) {
+    res.cookie('refresh_token', token, this.getRefreshCookieOptions());
   }
 }

@@ -23,7 +23,7 @@ export class RouteStop {
   @JoinColumn({ name: 'city_id' })
   city: City;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar'})
   type: 'PICKUP' | 'DROPOFF';
 
   @Column({ type: 'int' })

@@ -8,6 +8,7 @@ import {
 
 export type UserRole = 'admin' | 'agent' | 'user';
 export type AuthProvider = 'local' | 'google';
+export type UserStatus = 'pending' | 'active' | 'banned';
 
 @Entity({ name: 'users' })
 export class User {
@@ -32,23 +33,14 @@ export class User {
   @Column({ default: 'local' })
   provider: AuthProvider;
 
-  @Column({ default: 'active' })
-  status: 'active' | 'suspended';
-
-  @Column({ nullable: true })
-  avatarUrl?: string;
+  @Column({ default: 'pending' })
+  status: UserStatus;
 
   @Column({ default: false })
   verified: boolean;
 
   @Column({ type: 'text', nullable: true })
   refreshTokenHash?: string | null;
-
-  @Column({ default: 0 })
-  failedLoginAttempts: number;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  lockedUntil?: Date;
 
   @CreateDateColumn()
   createdAt: Date;

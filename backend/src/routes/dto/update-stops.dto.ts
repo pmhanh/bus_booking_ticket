@@ -4,6 +4,7 @@ import {
   IsIn,
   IsInt,
   IsPositive,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -17,9 +18,11 @@ class StopItemDto {
   type: 'PICKUP' | 'DROPOFF';
 
   @IsInt()
+  @IsPositive()
   order: number;
 
   @IsInt()
+  @Min(0)
   estimatedOffsetMinutes: number;
 }
 

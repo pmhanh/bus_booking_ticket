@@ -262,7 +262,7 @@ export const AdminTripsPage = () => {
           />
 
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">Loại xe</div>
+            <div className="mb-2 font-medium">Loại xe</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={busForm.busType}
@@ -284,7 +284,7 @@ export const AdminTripsPage = () => {
           </label>
 
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">Sơ đồ ghế</div>
+            <div className="mb-2 font-medium">Sơ đồ ghế</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={busForm.seatMapId === '' ? '' : String(busForm.seatMapId ?? '')}
@@ -318,7 +318,7 @@ export const AdminTripsPage = () => {
       <Card title={form.id ? 'Cập nhật chuyến' : 'Tạo chuyến'}>
         <div className="grid md:grid-cols-3 gap-4">
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">Tuyến</div>
+            <div className="mb-2 font-medium">Tuyến</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={form.routeId === '' ? '' : String(form.routeId)}
@@ -336,7 +336,7 @@ export const AdminTripsPage = () => {
           </label>
 
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">Xe</div>
+            <div className="mb-2 font-medium">Xe</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={form.busId === '' ? '' : String(form.busId)}
@@ -398,7 +398,7 @@ export const AdminTripsPage = () => {
       <Card title="Bộ lọc">
         <div className="grid md:grid-cols-5 gap-3 text-sm">
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">Tuyến</div>
+            <div className="mb-2 font-medium">Tuyến</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={filters.routeId === '' || filters.routeId == null ? '' : String(filters.routeId)}
@@ -416,7 +416,7 @@ export const AdminTripsPage = () => {
           </label>
 
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">Xe</div>
+            <div className="mb-2 font-medium">Xe</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={filters.busId === '' || filters.busId == null ? '' : String(filters.busId)}
@@ -447,7 +447,7 @@ export const AdminTripsPage = () => {
           />
 
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">Điểm đi</div>
+            <div className="mb-2 font-medium">Điểm đi</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={
@@ -467,7 +467,7 @@ export const AdminTripsPage = () => {
           </label>
 
           <label className="block text-sm text-gray-200">
-            <div className="mb-1 font-medium">Điểm đến</div>
+            <div className="mb-2 font-medium">Điểm đến</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={

@@ -9,5 +9,5 @@ export type User = {
   provider: 'local' | 'google';
   avatarUrl?: string;
   verified: boolean;
-  status: 'active' | 'suspended';
+  status: 'pending' | 'active' | 'banned';
 };

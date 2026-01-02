@@ -23,10 +23,10 @@ export const AdminUsersPage = () => {
   }, [accessToken, filters]);
 
   const toggleStatus = async (user: User) => {
-    const nextStatus = user.status === "active" ? "suspended" : "active";
+    const nextStatus = user.status === "banned" ? "active" : "banned";
     await apiClient<User>(`/admin/users/${user.id}/status`, {
       method: "PATCH",
-      body: JSON.stringify({ status: nextStatus }),
+      body: { status: nextStatus },
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     setFilters({ ...filters });
@@ -55,7 +55,7 @@ export const AdminUsersPage = () => {
             label="Status"
             value={filters.status}
             onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-            placeholder="active/suspended"
+            placeholder="pending/active/banned"
           />
         </div>
       </div>
@@ -75,15 +75,19 @@ export const AdminUsersPage = () => {
                 <span className="px-2 py-1 rounded-full bg-white/10 text-xs mr-2">{u.role}</span>
                 <span
                   className={`px-2 py-1 rounded-full text-xs ${
-                    u.status === "active" ? "bg-green-600/30 text-green-300" : "bg-error/30 text-error"
+                    u.status === "active"
+                      ? "bg-green-600/30 text-green-300"
+                      : u.status === "pending"
+                        ? "bg-yellow-600/30 text-yellow-200"
+                        : "bg-error/30 text-error"
                   }`}
                 >
-                  {u.status === "active" ? "Active" : "Suspended"}
+                  {u.status === "active" ? "Active" : u.status === "pending" ? "Pending" : "Banned"}
                 </span>
               </div>
               <div className="text-right">
                 <Button variant="secondary" onClick={() => toggleStatus(u)}>
-                  {u.status === "active" ? "Suspend" : "Activate"}
+                  {u.status === "banned" ? "Activate" : "Ban"}
                 </Button>
               </div>
             </div>

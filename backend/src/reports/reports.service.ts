@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Between, MoreThan, Repository } from 'typeorm';
 import { Booking } from '../bookings/booking.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { Trip } from '../trips/trip.entity';
@@ -116,7 +116,7 @@ export class ReportsService {
   private async sumRevenue(from?: Date, to?: Date) {
     const qb = this.paymentRepo
       .createQueryBuilder('payment')
-      .innerJoin(Booking, 'booking', 'booking.id = payment.bookingId')
+      .innerJoin(Booking, 'booking', 'booking.id::text = payment."bookingId"')
       .select('COALESCE(SUM(payment.amount), 0)', 'sum')
       .where('payment.status = :status', { status: 'SUCCESS' });
 
@@ -186,7 +186,7 @@ export class ReportsService {
       .leftJoin(
         Payment,
         'payment',
-        "payment.bookingId = booking.id AND payment.status = 'SUCCESS'",
+        'payment."bookingId" = booking.id::text AND payment.status = \'SUCCESS\'',
       )
       .select('route.id', 'routeId')
       .addSelect('originCity.name', 'origin')
@@ -290,7 +290,7 @@ export class ReportsService {
 
     const rows = await this.paymentRepo
       .createQueryBuilder('payment')
-      .innerJoin(Booking, 'booking', 'booking.id = payment.bookingId')
+      .innerJoin(Booking, 'booking', 'booking.id::text = payment."bookingId"')
       .select(dateExpr, 'date')
       .addSelect('COALESCE(SUM(payment.amount), 0)::int', 'value')
       .where('payment.status = :status', { status: 'SUCCESS' })
@@ -361,9 +361,9 @@ export class ReportsService {
       this.userRepo.count(),
       this.userRepo.count({ where: { status: 'active' } }),
       this.tripRepo.count({
-        where: { status: 'SCHEDULED', departureTime: Between(new Date(), new Date('2999-12-31')) } as any,
+        where: { status: 'SCHEDULED', departureTime: MoreThan(new Date()) },
       }),
-      this.tripRepo.count({ where: { status: 'CANCELLED' } as any }),
+      this.tripRepo.count({ where: { status: 'CANCELLED' } }),
       this.bookingRepo.count({ where: { createdAt: Between(todayStart, todayEnd) } }),
       this.bookingRepo.count({
         where: { createdAt: Between(todayStart, todayEnd), status: 'CONFIRMED' },

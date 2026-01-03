@@ -31,6 +31,7 @@ export const AppShell = ({ children }: PropsWithChildren) => {
                 <NavItem to="/admin/trips" label="Trips" />
                 <NavItem to="/admin/routes" label="Routes" />
                 <NavItem to="/admin/seat-maps" label="Seat maps" />
+                <NavItem to="/admin/reports" label="Reports" />
                 <NavItem to="/admin/users" label="Users" />
               </>
             ) : (

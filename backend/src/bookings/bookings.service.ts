@@ -487,17 +487,85 @@ export class BookingsService {
   }
 
 
-  async cancel(code: string, opts: BookingAccessOptions = {}) {
-    const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
-    if (booking.status === 'CONFIRMED') {
-      // tuỳ policy: hoàn tiền / disallow cancel
-      // hiện tại cho cancel vẫn ok nhưng nhớ xử lý refund nếu có payment
-    }
-    booking.status = 'CANCELLED';
-    return this.bookingRepo.save(booking);
+async cancel(code: string, opts: BookingAccessOptions = {}) {
+  const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
+  if (booking.status === 'CANCELLED') return booking;
+  if (booking.status === 'EXPIRED') throw new BadRequestException('Booking đã hết hạn');
+
+  const departureMs = booking.trip?.departureTime ? new Date(booking.trip.departureTime).getTime() : undefined;
+  if (!departureMs || Number.isNaN(departureMs)) throw new BadRequestException('Missing departure time');
+
+  if (departureMs - Date.now() < 3 * 60 * 60 * 1000) {
+    throw new BadRequestException('Bạn phải hủy trước giờ khởi hành ít nhất 3 giờ.');
   }
 
-  async ticketContent(code: string, opts: BookingAccessOptions = {}) {
+  const tripId = booking.trip?.id;
+  const lockToken = (booking as any).lockToken as string | undefined;
+
+  const updated = await this.dataSource.transaction(async (manager) => {
+    const bookingRepo = manager.getRepository(Booking);
+    const tripSeatRepo = manager.getRepository(TripSeat);
+
+    const fresh = await bookingRepo.findOne({
+      where: { id: booking.id } as any,
+      relations: ['trip', 'details', 'details.tripSeat'],
+      order: { details: { id: 'ASC' } } as any,
+    });
+    if (!fresh) throw new NotFoundException('Booking not found');
+    if (fresh.status === 'CANCELLED') return fresh;
+    if (fresh.status === 'EXPIRED') throw new BadRequestException('Booking đã hết hạn');
+
+    const dep = fresh.trip?.departureTime ? new Date(fresh.trip.departureTime).getTime() : undefined;
+    if (!dep || Number.isNaN(dep) || dep - Date.now() < 3 * 60 * 60 * 1000) {
+      throw new BadRequestException('Bạn phải hủy trước giờ khởi hành ít nhất 3 giờ.');
+    }
+
+    // cancel whole booking
+    fresh.status = 'CANCELLED';
+    await bookingRepo.save(fresh);
+
+    // reopen seats
+    const seatIds = (fresh.details ?? []).map((d) => d.tripSeat?.id).filter(Boolean) as number[];
+    if (seatIds.length) {
+      await tripSeatRepo
+        .createQueryBuilder()
+        .update(TripSeat)
+        .set({ isBooked: false, bookedAt: null })
+        .where('id IN (:...ids)', { ids: seatIds })
+        .execute();
+    }
+
+    return fresh;
+  });
+
+  // after commit: unlock redis best-effort
+  const seatCodes = (updated.details ?? []).map((d) => d.seatCodeSnapshot).filter(Boolean);
+
+  if (tripId && lockToken && seatCodes.length) {
+    try {
+      await this.seatLockService.unlockSeats(tripId, seatCodes, lockToken);
+    } catch {}
+  }
+
+  // after commit: websocket broadcast (tuỳ gateway của bạn)
+  if (tripId && seatCodes.length) {
+    // Nếu bạn có event riêng cho seat available thì dùng nó
+    if ((this.seatGateway as any).emitSeatAvailable) {
+      (this.seatGateway as any).emitSeatAvailable(tripId, seatCodes);
+    } else if ((this.seatGateway as any).emitSeatUpdated) {
+      (this.seatGateway as any).emitSeatUpdated(tripId, seatCodes);
+    } else {
+      // fallback: emit booked để client refresh (không lý tưởng, nhưng còn hơn không)
+      this.seatGateway.emitSeatBooked(tripId, seatCodes);
+    }
+  }
+
+  return updated;
+}
+
+
+
+async ticketContent(code: string, opts: BookingAccessOptions = {}) {
     const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
     if (booking.status !== 'CONFIRMED')
       throw new BadRequestException('Ticket only available for confirmed bookings');

@@ -101,20 +101,23 @@ export class BookingsController {
     });
   }
 
-  @UseGuards(OptionalJwtAuthGuard)
-  @Patch(':reference/cancel')
-  cancel(
-    @Param('reference') reference: string,
-    @Req() req: AuthedRequest,
-    @Body() dto: CancelBookingDto,
-  ) {
-    const user = req.user as JwtPayload | undefined;
-    return this.bookingsService.cancel(reference, {
-      userId: user?.sub,
-      contactEmail: dto.contactEmail,
-      contactPhone: dto.contactPhone,
-    });
-  }
+@UseGuards(OptionalJwtAuthGuard)
+@Patch(':reference/cancel')
+cancel(
+  @Param('reference') reference: string,
+  @Req() req: AuthedRequest,
+  @Body() dto: CancelBookingDto,
+) {
+  const user = req.user as JwtPayload | undefined;
+
+  return this.bookingsService.cancel(reference, {
+    userId: user?.sub,
+    contactEmail: user ? undefined : dto.contactEmail,
+    contactPhone: user ? undefined : dto.contactPhone,
+    requireContactForGuest: !user, // <-- thêm dòng này cho rõ nghĩa
+  });
+}
+
 
   @Get(':reference/ticket')
   ticket(

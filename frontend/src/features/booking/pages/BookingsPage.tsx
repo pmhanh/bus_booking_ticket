@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/context/AuthContext';
 import { useBooking } from '../context/BookingContext';
 import type { Booking } from '../types/booking';
 import { cancelBooking, getMyBookings, lookupBooking, updateBooking } from '../api/bookings';
+import { useToast } from '../../../shared/providers/ToastProvider';
 
 const normalizePassengers = (booking: any) => {
   const passengers = booking?.passengers;
@@ -37,9 +38,18 @@ const withPassengers = (booking: any): Booking => ({
   passengers: normalizePassengers(booking),
 });
 
+const canCancelBefore3Hours = (departureTime?: string | Date | null) => {
+  if (!departureTime) return false;
+  const dep = new Date(departureTime).getTime();
+  if (Number.isNaN(dep)) return false;
+  return dep - Date.now() >= 3 * 60 * 60 * 1000;
+};
+
+
 export const BookingsPage = () => {
   const { user, accessToken } = useAuth();
   const { setContact } = useBooking();
+  const { showMessage } = useToast();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,14 +78,67 @@ export const BookingsPage = () => {
       .finally(() => setLoading(false));
   }, [accessToken]);
 
-  const handleCancel = async (id: string) => {
-    const contact = lookupResult?.id === id ? { phone: lookupPhone, email: lookupEmail } : undefined;
-    const confirmed = window.confirm('Bạn chắc muốn huỷ đặt chỗ này?');
-    if (!confirmed) return;
-    await cancelBooking(id, accessToken, contact);
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'CANCELLED' } : b)));
-    if (lookupResult?.id === id) setLookupResult({ ...lookupResult, status: 'CANCELLED' });
-  };
+    const handleCancel = async (id: string) => {
+  const booking =
+    bookings.find((x) => x.id === id) || (lookupResult?.id === id ? lookupResult : null);
+
+  if (!booking) {
+    showMessage({ type: 'error', message: 'Không tìm thấy booking để hủy.' });
+    return;
+  }
+
+  const departureTime = booking.trip?.departureTime;
+
+  if (!canCancelBefore3Hours(departureTime)) {
+    showMessage({
+      type: 'error',
+      message: 'Không thể hủy: phải hủy trước giờ khởi hành ít nhất 3 giờ.',
+    });
+    return;
+  }
+
+  const policy =
+    'Chính sách hoàn tiền: tùy nhà xe/cổng thanh toán. Tiền (nếu có) sẽ được xử lý theo quy định.';
+
+  const ok = window.confirm(
+    `Bạn chắc muốn HỦY booking ${booking.reference || booking.id}?\n\n${policy}`,
+  );
+  if (!ok) return;
+
+  try {
+    showMessage({ type: 'info', message: `Đang hủy booking... ${policy}` });
+
+    // guest cancel: nếu không có accessToken thì gửi contact để verify (backend của bạn có assertAccess)
+    const contact =
+  !accessToken
+    ? { phone: booking.contactPhone || lookupPhone || undefined, email: booking.contactEmail || lookupEmail || undefined }
+    : undefined;
+
+    const updated = await cancelBooking(id, accessToken, contact);
+
+    // Update list (ưu tiên data trả về từ backend nếu có)
+    setBookings((prev) =>
+      prev.map((b) => (b.id === id ? withPassengers(updated) : b)),
+    );
+
+    if (lookupResult?.id === id) setLookupResult(withPassengers(updated));
+
+    // nếu đang mở editor của booking này thì đóng luôn
+    if (editing?.id === id) setEditing(null);
+
+    showMessage({
+      type: 'success',
+      message: `Đã hủy booking ${booking.reference || booking.id}. ${policy}`,
+    });
+  } catch (e) {
+    showMessage({
+      type: 'error',
+      message: (e as Error)?.message || 'Hủy booking thất bại.',
+    });
+  }
+};
+
+
 
   const handleLookup = async () => {
     if (!lookupCode && !lookupPhone && !lookupEmail) {

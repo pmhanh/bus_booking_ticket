@@ -217,7 +217,10 @@ async create(dto: CreateTripDto) {
     if (params.minPrice !== undefined) qb.andWhere('trip.basePrice >= :minPrice', { minPrice: params.minPrice });
     if (params.maxPrice !== undefined) qb.andWhere('trip.basePrice <= :maxPrice', { maxPrice: params.maxPrice });
     if (params.busType) qb.andWhere('bus.busType = :busType', { busType: params.busType });
-    if (params.amenities?.length) qb.andWhere('bus.amenities @> :amenities', { amenities: params.amenities });
+    if (params.amenities?.length)
+      qb.andWhere('bus.amenities @> :amenities::text[]', {
+        amenities: params.amenities,
+      });
 
     const sortBy = params.sortBy || 'time';
     const sortOrder = params.sortOrder?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';

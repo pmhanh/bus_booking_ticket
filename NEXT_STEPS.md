@@ -1,4 +1,0 @@
-- Introduce ticketing domain models (routes, trips, bookings) with migrations, seed scripts, and admin CRUD screens.
-- Persist themes/user preferences in DB; add a light theme and toggle control.
-- Replace mock dashboard data with live metrics backed by the new domain models; add charts (Recharts/Chart.js).
-- Add e2e auth tests (Playwright) and API contract tests; wire CI (GitHub Actions) to run lint + test.

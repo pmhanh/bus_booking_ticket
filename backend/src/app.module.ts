@@ -29,6 +29,8 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ReportsModule } from './reports/reports.module';
 import { AdminBookingsModule } from './admin-bookings/admin-bookings.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { Review } from './reviews/review.entity';
 
 @Module({
   imports: [
@@ -58,6 +60,7 @@ import { AdminBookingsModule } from './admin-bookings/admin-bookings.module';
             BookingDetail,
             TripSeat,
             Payment,
+            Review,
           ],
           synchronize: true,
         };
@@ -76,6 +79,7 @@ import { AdminBookingsModule } from './admin-bookings/admin-bookings.module';
     PaymentsModule,
     ReportsModule,
     AdminBookingsModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

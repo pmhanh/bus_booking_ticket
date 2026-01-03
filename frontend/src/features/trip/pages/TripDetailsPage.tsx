@@ -4,6 +4,11 @@ import { getTripById } from "../api/trips";
 import { Card } from "../../../shared/components/ui/Card";
 import { Button } from "../../../shared/components/ui/Button";
 import type { Trip } from "../types/trip";
+import { getTripReviews, createTripReview } from "../api/reviews";
+import type { TripReviewsResponse } from "../types/review";
+import { useAuth } from "../../auth/context/AuthContext";
+import { FormField } from "../../../shared/components/ui/FormField";
+import { useToast } from "../../../shared/providers/ToastProvider";
 
 const formatTime = (date: string) =>
   new Date(date).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
@@ -29,9 +34,15 @@ export const TripDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, accessToken } = useAuth();
+  const { showMessage } = useToast();
   const [trip, setTripData] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<TripReviewsResponse | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [content, setContent] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -40,6 +51,15 @@ export const TripDetailsPage = () => {
       .then((data) => setTripData(data))
       .catch((err) => setError(err.message || "Unable to load trip"))
       .finally(() => setLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    setReviewLoading(true);
+    getTripReviews(Number(id))
+      .then(setReviews)
+      .catch(() => {})
+      .finally(() => setReviewLoading(false));
   }, [id]);
 
   const urlParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
@@ -111,6 +131,26 @@ export const TripDetailsPage = () => {
     if (bookingState.date) qs.set("date", bookingState.date);
     return qs.toString() ? `?${qs.toString()}` : "";
   }, [bookingState]);
+
+  const submitReview = async () => {
+    if (!accessToken) {
+      showMessage({ type: "error", message: "Bạn cần đăng nhập để bình luận." });
+      return;
+    }
+    if (!id) return;
+    if (!content.trim()) {
+      showMessage({ type: "error", message: "Vui lòng nhập nội dung bình luận." });
+      return;
+    }
+    try {
+      await createTripReview(Number(id), { rating: Number(rating), content: content.trim() }, accessToken);
+      setContent("");
+      showMessage({ type: "success", message: "Đã gửi review." });
+      setReviews(await getTripReviews(Number(id)));
+    } catch (e) {
+      showMessage({ type: "error", message: (e as Error)?.message || "Gửi review thất bại" });
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -252,6 +292,52 @@ export const TripDetailsPage = () => {
                     <Button variant="ghost">Gửi hỗ trợ</Button>
                   </div>
                 </div>
+              </div>
+            </Card>
+
+            <Card title={`Đánh giá (${reviews?.count ?? 0})`}>
+              <div className="text-sm text-gray-300 mb-2">
+                Trung bình: <span className="text-white font-semibold">{(reviews?.avgRating ?? 0).toFixed(1)}</span>/5
+              </div>
+              {reviewLoading ? <div className="text-sm text-gray-400">Đang tải đánh giá...</div> : null}
+
+              {user ? (
+                <div className="space-y-2 mb-4">
+                  <FormField
+                    label="Điểm (1-5)"
+                    type="number"
+                    value={rating}
+                    onChange={(e) => setRating(Number(e.target.value))}
+                    min={1}
+                    max={5}
+                  />
+                  <FormField
+                    label="Bình luận"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Viết trải nghiệm của bạn"
+                  />
+                  <Button onClick={submitReview}>Gửi</Button>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400 mb-3">Đăng nhập để viết bình luận.</div>
+              )}
+
+              <div className="space-y-3">
+                {reviews?.items?.length ? (
+                  reviews.items.map((r) => (
+                    <div key={r.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-white font-semibold">{r.user.fullName || r.user.email || "User"}</div>
+                        <div className="text-xs text-gray-400">{new Date(r.createdAt).toLocaleString("vi-VN")}</div>
+                      </div>
+                      <div className="text-xs text-emerald-200">Rating: {r.rating}/5</div>
+                      <div className="text-sm text-gray-200 mt-1">{r.content}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-400">Chưa có đánh giá.</div>
+                )}
               </div>
             </Card>
           </div>

@@ -1,6 +1,6 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import type { PropsWithChildren } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../features/auth/context/AuthContext';
 import { Button } from '../../shared/components/ui/Button';
 import clsx from 'clsx';
@@ -10,7 +10,18 @@ export const AppShell = ({ children }: PropsWithChildren) => {
   const { user, status, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const booting = status === 'booting';
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuOpen && menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
 
   return (
     <ToastProvider>
@@ -46,22 +57,18 @@ export const AppShell = ({ children }: PropsWithChildren) => {
               <div className="h-10 w-28 rounded-xl bg-white/10 animate-pulse" aria-label="Loading session" />
             ) : user ? (
               <>
-                <div className="relative">
+                <div className="relative" ref={menuRef}>
                   <div
                     className="text-right cursor-pointer select-none border border-white/15 rounded-xl px-3 py-2 bg-white/5"
                     onClick={() => setMenuOpen((v) => !v)}
-                    onMouseEnter={() => setMenuOpen(true)}
-                    onMouseLeave={() => setMenuOpen(false)}
                   >
                     <div className="text-sm font-semibold">{user.fullName || user.email}</div>
                   </div>
                   <div
                     className={clsx(
-                      'absolute right-0 mt-2 w-44 rounded-xl bg-surface border border-white/10 shadow-card transition-all',
+                      'absolute right-0 top-full translate-y-1 w-44 rounded-xl bg-surface border border-white/10 shadow-card transition-all',
                       menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
                     )}
-                    onMouseEnter={() => setMenuOpen(true)}
-                    onMouseLeave={() => setMenuOpen(false)}
                   >
                     <button
                       className="w-full text-left px-4 py-2 hover:bg-white/10 text-sm"

@@ -6,10 +6,43 @@ import { FormField } from "../../../shared/components/ui/FormField";
 import { useBooking } from "../context/BookingContext";
 import { useAuth } from "../../auth/context/AuthContext";
 
+// ===== Helpers: VN phone + CCCD =====
+const normalizePhoneVN = (raw: string) => {
+  const s = (raw || "").trim();
+
+  // remove spaces, dots, dashes... keep digits and '+'
+  const cleaned = s.replace(/[^\d+]/g, "");
+
+  // +84xxxxxxxxx => 0xxxxxxxxx
+  if (cleaned.startsWith("+84")) {
+    return "0" + cleaned.slice(3).replace(/[^\d]/g, "");
+  }
+
+  // 84xxxxxxxxx (no '+') => 0xxxxxxxxx (optional support)
+  if (cleaned.startsWith("84") && cleaned.length >= 11) {
+    return "0" + cleaned.slice(2).replace(/[^\d]/g, "");
+  }
+
+  // keep digits only
+  return cleaned.replace(/[^\d]/g, "");
+};
+
+const isVietnamMobilePhone = (raw: string) => {
+  const p = normalizePhoneVN(raw);
+  // VN mobile commonly: 0 + 9 or 10 digits => total 10 or 11 digits
+  return /^0\d{9,10}$/.test(p);
+};
+
+const isCCCD12 = (raw: string) => {
+  const id = (raw || "").trim().replace(/\s+/g, "");
+  return /^\d{12}$/.test(id);
+};
+
 export const BookingPassengersPage = () => {
   const navigate = useNavigate();
   const { trip, passengers, hold, updatePassenger, contact, setContact, totalPrice } = useBooking();
   const { user } = useAuth();
+
   const [error, setError] = useState<string | null>(null);
   const [passengerErrors, setPassengerErrors] = useState<
     Record<string, { name?: string; phone?: string; idNumber?: string }>
@@ -30,17 +63,17 @@ export const BookingPassengersPage = () => {
   useEffect(() => {
     if (!user) return;
     if (contact.name || contact.email || contact.phone) return;
+
     setContact({
-        name: user.fullName || "",
-        email: user.email || "",
-        phone: user.phone || "",
+      name: user.fullName || "",
+      email: user.email || "",
+      phone: user.phone || "",
     });
   }, [user, contact.name, contact.email, contact.phone, setContact]);
 
   const validateForms = () => {
     setError(null);
 
-    const phoneRegex = /^[0-9]{9,11}$/;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     const nextPassengerErrors: Record<string, { name?: string; phone?: string; idNumber?: string }> = {};
@@ -50,6 +83,7 @@ export const BookingPassengersPage = () => {
     passengers.forEach((p) => {
       const key = p.seatCode || "UNKNOWN";
 
+      // name
       if (!p.name?.trim()) {
         ok = false;
         nextPassengerErrors[key] = { ...(nextPassengerErrors[key] || {}), name: "Nhập họ tên" };
@@ -58,27 +92,34 @@ export const BookingPassengersPage = () => {
         nextPassengerErrors[key] = { ...(nextPassengerErrors[key] || {}), name: "Tên tối thiểu 2 ký tự" };
       }
 
+      // phone VN
       if (!p.phone?.trim()) {
         ok = false;
         nextPassengerErrors[key] = { ...(nextPassengerErrors[key] || {}), phone: "Nhập số điện thoại" };
-      } else if (!phoneRegex.test(p.phone.trim())) {
+      } else if (!isVietnamMobilePhone(p.phone)) {
         ok = false;
-        nextPassengerErrors[key] = { ...(nextPassengerErrors[key] || {}), phone: "Số điện thoại không hợp lệ" };
+        nextPassengerErrors[key] = {
+          ...(nextPassengerErrors[key] || {}),
+          phone: "SĐT VN không hợp lệ (vd: 09xxxxxxxx hoặc 03xxxxxxxxx)",
+        };
       }
 
+      // CCCD 12 digits
       if (!p.idNumber?.trim()) {
         ok = false;
-        nextPassengerErrors[key] = { ...(nextPassengerErrors[key] || {}), idNumber: "Nhập CCCD/Passport" };
-      } else if (p.idNumber.trim().length < 6) {
+        nextPassengerErrors[key] = { ...(nextPassengerErrors[key] || {}), idNumber: "Nhập CCCD" };
+      } else if (!isCCCD12(p.idNumber)) {
         ok = false;
-        nextPassengerErrors[key] = { ...(nextPassengerErrors[key] || {}), idNumber: "ID tối thiểu 6 ký tự" };
+        nextPassengerErrors[key] = { ...(nextPassengerErrors[key] || {}), idNumber: "CCCD phải đúng 12 chữ số" };
       }
     });
 
+    // contact
     if (!contact.name?.trim()) {
       ok = false;
       nextContactErrors.name = "Nhập tên liên hệ";
     }
+
     if (!contact.email?.trim()) {
       ok = false;
       nextContactErrors.email = "Nhập email";
@@ -86,12 +127,13 @@ export const BookingPassengersPage = () => {
       ok = false;
       nextContactErrors.email = "Email không hợp lệ";
     }
+
     if (!contact.phone?.trim()) {
       ok = false;
       nextContactErrors.phone = "Nhập số điện thoại liên hệ";
-    } else if (!phoneRegex.test(contact.phone.trim())) {
+    } else if (!isVietnamMobilePhone(contact.phone)) {
       ok = false;
-      nextContactErrors.phone = "Số điện thoại không hợp lệ";
+      nextContactErrors.phone = "SĐT VN không hợp lệ (vd: 09xxxxxxxx hoặc 03xxxxxxxxx)";
     }
 
     setPassengerErrors(nextPassengerErrors);
@@ -100,7 +142,10 @@ export const BookingPassengersPage = () => {
     return ok;
   };
 
-  const canContinue = useMemo(() => !!trip && !!hold?.lockToken && passengers.length > 0, [hold?.lockToken, passengers.length, trip]);
+  const canContinue = useMemo(
+    () => !!trip && !!hold?.lockToken && passengers.length > 0,
+    [hold?.lockToken, passengers.length, trip]
+  );
 
   const goReview = () => {
     if (!canContinue) return;
@@ -114,7 +159,6 @@ export const BookingPassengersPage = () => {
     <div className="max-w-5xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase text-gray-400">Passengers</p>
           <h1 className="text-3xl font-bold text-white">Nhập thông tin hành khách</h1>
           <p className="text-sm text-gray-300">Điền thông tin liên hệ & hành khách trước khi review.</p>
         </div>
@@ -132,6 +176,7 @@ export const BookingPassengersPage = () => {
             <span className="text-gray-500">{"->"}</span>
             <span>{trip.route.destinationCity.name}</span>
           </div>
+
           <div className="grid sm:grid-cols-3 gap-3 text-sm text-gray-200 mt-3">
             <div>
               <div className="text-xs text-gray-400 uppercase">Giờ đi</div>
@@ -160,6 +205,7 @@ export const BookingPassengersPage = () => {
               required
               error={contactErrors.name}
             />
+
             <FormField
               label="Email"
               type="email"
@@ -171,11 +217,12 @@ export const BookingPassengersPage = () => {
               required
               error={contactErrors.email}
             />
+
             <FormField
               label="Số điện thoại"
               value={contact.phone}
               onChange={(e) => {
-                setContact({ phone: e.target.value });
+                setContact({ phone: normalizePhoneVN(e.target.value) });
                 if (contactErrors.phone) setContactErrors((prev) => ({ ...prev, phone: undefined }));
               }}
               required
@@ -190,6 +237,7 @@ export const BookingPassengersPage = () => {
           {passengers.map((p) => {
             const key = p.seatCode || "UNKNOWN";
             const errs = passengerErrors[key] || {};
+
             return (
               <div key={key} className="grid md:grid-cols-3 gap-3 border border-white/10 rounded-xl px-3 py-2">
                 <div className="md:col-span-3 text-white font-semibold">Ghế {p.seatCode}</div>
@@ -215,7 +263,7 @@ export const BookingPassengersPage = () => {
                   label="Số điện thoại"
                   value={p.phone || ""}
                   onChange={(e) => {
-                    updatePassenger(p.seatCode, { phone: e.target.value });
+                    updatePassenger(p.seatCode, { phone: normalizePhoneVN(e.target.value) });
                     if (errs.phone) {
                       setPassengerErrors((prev) => ({
                         ...prev,
@@ -231,7 +279,10 @@ export const BookingPassengersPage = () => {
                   label="CCCD/Passport"
                   value={p.idNumber || ""}
                   onChange={(e) => {
-                    updatePassenger(p.seatCode, { idNumber: e.target.value });
+                    // CCCD: keep digits only (optional UX)
+                    const digitsOnly = e.target.value.replace(/[^\d]/g, "");
+                    updatePassenger(p.seatCode, { idNumber: digitsOnly });
+
                     if (errs.idNumber) {
                       setPassengerErrors((prev) => ({
                         ...prev,
@@ -252,49 +303,10 @@ export const BookingPassengersPage = () => {
           </div>
 
           <Button className="w-full" onClick={goReview}>
-            Tiếp tục (Review)
+            Tiếp tục
           </Button>
         </div>
       </Card>
     </div>
   );
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

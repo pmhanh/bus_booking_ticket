@@ -9,16 +9,13 @@ import type { Trip } from '../../trip/types/trip';
 import { RangeSlider } from '../../../shared/components/ui/RangeSlider';
 
 const BUS_TYPES: { value: string; label: string }[] = [
-  { value: 'STANDARD', label: 'Tiêu chuẩn' },
+  { value: 'SEATER', label: 'Ghế ngồi' },
   { value: 'SLEEPER', label: 'Giường nằm' },
   { value: 'LIMOUSINE', label: 'Limousine' },
-  { value: 'MINIBUS', label: 'Minibus' },
+  { value: 'VIP', label: 'Xe VIP' },
 ];
-const AMENITIES = ['WiFi', 'Nước uống', 'Sạc điện', 'Chăn', 'Đồ ăn nhẹ', 'Toilet'];
-
 const parseSearchParams = (params: URLSearchParams): TripSearchParams => {
   const toNumber = (value: string | null) => (value ? Number(value) : undefined);
-  const amenities = params.getAll('amenities').filter(Boolean);
   return {
     originId: toNumber(params.get('originId')),
     destinationId: toNumber(params.get('destinationId')),
@@ -28,7 +25,6 @@ const parseSearchParams = (params: URLSearchParams): TripSearchParams => {
     minPrice: toNumber(params.get('minPrice')),
     maxPrice: toNumber(params.get('maxPrice')),
     busType: params.get('busType') || undefined,
-    amenities: amenities.length ? amenities : undefined,
     sortBy: (params.get('sortBy') as TripSearchParams['sortBy']) || 'time',
     sortOrder: (params.get('sortOrder') as TripSearchParams['sortOrder']) || 'asc',
     page: toNumber(params.get('page')) || 1,
@@ -270,36 +266,6 @@ export const SearchResultsPage = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="text-xs uppercase text-gray-400">Tiện ích</div>
-              <div className="flex flex-wrap gap-2">
-                {AMENITIES.map((amenity) => {
-                  const active = filters.amenities?.includes(amenity);
-                  return (
-                    <button
-                      key={amenity}
-                      className={clsx(
-                        'px-3 py-2 rounded-xl border text-sm transition-colors',
-                        active
-                          ? 'bg-white/10 border-emerald-300 text-emerald-50'
-                          : 'border-white/10 text-white hover:border-white/30',
-                      )}
-                      onClick={() => {
-                        const next = new Set(filters.amenities || []);
-                        if (active) {
-                          next.delete(amenity);
-                        } else {
-                          next.add(amenity);
-                        }
-                        updateParam('amenities', Array.from(next));
-                      }}
-                    >
-                      {amenity}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </div>
         </Card>
 
@@ -347,12 +313,11 @@ export const SearchResultsPage = () => {
           {error ? <Card className="text-red-200 text-sm">{error}</Card> : null}
 
           {!loading && !error && result?.data?.length
-            ? result.data.map((trip) => <TripCard key={trip.id} trip={trip} filters={filters} />)
-            : null}
+            ? result.data.map((trip) => <TripCard key={trip.id} trip={trip} filters={filters} />):null}
 
-          {!loading && !error && result && result.data.length === 0 ? (
+          {!loading && !error && result && result.data?.length === 0 ? (
             <Card className="text-center text-gray-300 text-sm">
-              Chưa có chuyến phù hợp. Thử nới khoảng giờ hoặc bỏ bớt tiện ích.
+              Chưa có chuyến đi phù hợp. Thay đổi khoảng thời gian hoặc đổi ngày.
             </Card>
           ) : null}
 

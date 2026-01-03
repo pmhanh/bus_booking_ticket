@@ -81,6 +81,36 @@ export const TripDetailsPage = () => {
   }, [searchState, urlParams]);
 
   const stops = useMemo(() => trip?.route?.stops?.slice().sort((a, b) => a.order - b.order) || [], [trip]);
+  const bookingState = useMemo(() => {
+    if (!trip) return null;
+    const originIdFromParams = urlParams.get("originId");
+    const destinationIdFromParams = urlParams.get("destinationId");
+    const dateFromParams = urlParams.get("date");
+    return {
+      originId: searchState?.originId || (originIdFromParams ? Number(originIdFromParams) : trip.route.originCity.id),
+      destinationId:
+        searchState?.destinationId ||
+        (destinationIdFromParams ? Number(destinationIdFromParams) : trip.route.destinationCity.id),
+      date: searchState?.date || dateFromParams || trip.departureTime?.split("T")[0],
+      originName: searchState?.originName || urlParams.get("originName") || trip.route.originCity.name,
+      destinationName: searchState?.destinationName || urlParams.get("destinationName") || trip.route.destinationCity.name,
+    };
+  }, [trip, searchState, urlParams]);
+
+  const bookingQuery = useMemo(() => {
+    if (!bookingState) return "";
+    const qs = new URLSearchParams();
+    if (bookingState.originId) {
+      qs.set("originId", String(bookingState.originId));
+      if (bookingState.originName) qs.set("originName", bookingState.originName);
+    }
+    if (bookingState.destinationId) {
+      qs.set("destinationId", String(bookingState.destinationId));
+      if (bookingState.destinationName) qs.set("destinationName", bookingState.destinationName);
+    }
+    if (bookingState.date) qs.set("date", bookingState.date);
+    return qs.toString() ? `?${qs.toString()}` : "";
+  }, [bookingState]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -97,9 +127,18 @@ export const TripDetailsPage = () => {
             </p>
           ) : null}
         </div>
-        <Link to={backQuery ? `/search${backQuery}` : "/search"}>
-          <Button variant="secondary">Tìm lại</Button>
-        </Link>
+        {trip && bookingState ? (
+          <Link
+            to={bookingQuery ? `/trips/${trip.id}/select-seats${bookingQuery}` : `/trips/${trip.id}/select-seats`}
+            state={{ search: bookingState }}
+          >
+            <Button>Đặt chỗ</Button>
+          </Link>
+        ) : (
+          <Button variant="secondary" disabled>
+            Đặt chỗ
+          </Button>
+        )}
       </div>
 
       {loading ? (

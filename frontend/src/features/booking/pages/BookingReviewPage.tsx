@@ -85,9 +85,13 @@ export const BookingReviewPage = () => {
           <h1 className="text-3xl font-bold text-white">Xác nhận đặt chỗ</h1>
           <p className="text-sm text-gray-300">Kiểm tra thông tin trước khi tạo vé điện tử.</p>
         </div>
-        <Button variant="secondary" onClick={() => navigate(-1)}>
+        {/* <Button variant="secondary" onClick={() => navigate(-1)}>
           Quay lại
         </Button>
+         */}
+         <Button variant="secondary" onClick={() => navigate("/bookings/passengers")}>
+                Sửa thông tin
+              </Button>
       </div>
 
       {error ? <Card className="text-red-200 text-sm">{error}</Card> : null}
@@ -122,11 +126,11 @@ export const BookingReviewPage = () => {
             <div><span className="text-gray-400">Email:</span> <span className="text-white font-semibold">{contact.email}</span></div>
             <div><span className="text-gray-400">SĐT:</span> <span className="text-white font-semibold">{contact.phone}</span></div>
 
-            <div className="pt-3">
+            {/* <div className="pt-3">
               <Button variant="secondary" onClick={() => navigate("/bookings/passengers")}>
                 Sửa thông tin
               </Button>
-            </div>
+            </div> */}
           </div>
         </Card>
       </div>
@@ -148,7 +152,7 @@ export const BookingReviewPage = () => {
           </div>
 
           <Button onClick={confirmBooking} disabled={submitting} className="w-full">
-            {submitting ? "Đang xử lý..." : "Xác nhận & tạo e-ticket"}
+            {submitting ? "Đang xử lý..." : "Xác nhận & thanh toán"}
           </Button>
         </div>
       </Card>

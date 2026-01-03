@@ -15,4 +15,7 @@ export class UpdateProfileDto {
   @IsPhoneNumber('VN')
   phone?: string;
 
+  @IsOptional()
+  @IsString()
+  avatarUrl?: string;
 }

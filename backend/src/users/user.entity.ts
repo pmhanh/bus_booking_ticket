@@ -27,6 +27,9 @@ export class User {
   @Column({ nullable: true })
   phone?: string;
 
+  @Column({ nullable: true })
+  avatarUrl?: string;
+
   @Column({ default: 'user' })
   role: UserRole;
 

@@ -3,10 +3,12 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Route } from '../routes/route.entity';
 import { Bus } from '../buses/bus.entity';
+import { Booking } from '../bookings/booking.entity';
 
 @Entity({ name: 'trips' })
 export class Trip {
@@ -32,4 +34,7 @@ export class Trip {
 
   @Column({ type: 'varchar', default: 'SCHEDULED' })
   status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+
+  @OneToMany(() => Booking, (booking) => booking.trip)
+  bookings: Booking[];
 }

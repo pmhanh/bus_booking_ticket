@@ -26,6 +26,7 @@ export const AppShell = ({ children }: PropsWithChildren) => {
             {user?.role === 'admin' ? (
               <>
                 <NavItem to="/dashboard" label="Dashboard" />
+                <NavItem to="/admin/bookings" label="Bookings" />
                 <NavItem to="/admin/buses" label="Buses" />
                 <NavItem to="/admin/trips" label="Trips" />
                 <NavItem to="/admin/routes" label="Routes" />

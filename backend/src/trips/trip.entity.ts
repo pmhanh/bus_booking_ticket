@@ -31,5 +31,5 @@ export class Trip {
   basePrice: number;
 
   @Column({ type: 'varchar', default: 'SCHEDULED' })
-  status: 'SCHEDULED' | 'CANCELLED' | 'COMPLETED';
+  status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 }

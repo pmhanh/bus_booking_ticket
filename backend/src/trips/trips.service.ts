@@ -132,17 +132,26 @@ async create(dto: CreateTripDto) {
   });
 }
 
-  list(filter?: { routeId?: number; busId?: number; fromDate?: string; toDate?: string; offset?: number; limit?: number }) {
+  list(filter?: {
+    routeId?: number;
+    busId?: number;
+    fromDate?: string;
+    toDate?: string;
+    status?: string;
+    sortBy?: string;
+    offset?: number;
+    limit?: number
+  }) {
     const qb = this.tripRepo
       .createQueryBuilder('trip')
       .leftJoinAndSelect('trip.route', 'route')
       .leftJoinAndSelect('route.originCity', 'originCity')
       .leftJoinAndSelect('route.destinationCity', 'destinationCity')
-      .leftJoinAndSelect('trip.bus', 'bus')
-      .orderBy('trip.departureTime', 'DESC');
+      .leftJoinAndSelect('trip.bus', 'bus');
 
     if (filter?.routeId) qb.andWhere('route.id = :rid', { rid: filter.routeId });
     if (filter?.busId) qb.andWhere('bus.id = :bid', { bid: filter.busId });
+    if (filter?.status) qb.andWhere('trip.status = :status', { status: filter.status });
 
     if (filter?.fromDate && filter?.toDate) {
       qb.andWhere('trip.departureTime BETWEEN :from AND :to', {
@@ -153,6 +162,21 @@ async create(dto: CreateTripDto) {
       qb.andWhere('trip.departureTime >= :from', { from: new Date(filter.fromDate) });
     } else if (filter?.toDate) {
       qb.andWhere('trip.departureTime <= :to', { to: new Date(filter.toDate) });
+    }
+
+    // Sorting
+    if (filter?.sortBy === 'bookings') {
+      qb.leftJoin('trip.bookings', 'booking')
+        .addSelect('COUNT(booking.id)', 'booking_count')
+        .groupBy('trip.id')
+        .addGroupBy('route.id')
+        .addGroupBy('originCity.id')
+        .addGroupBy('destinationCity.id')
+        .addGroupBy('bus.id')
+        .orderBy('booking_count', 'DESC')
+        .addOrderBy('trip.departureTime', 'DESC');
+    } else {
+      qb.orderBy('trip.departureTime', 'DESC');
     }
 
     if (filter?.limit) qb.take(filter.limit);
@@ -259,6 +283,33 @@ async create(dto: CreateTripDto) {
     if (dto.basePrice !== undefined) trip.basePrice = dto.basePrice;
     if (dto.status) trip.status = dto.status;
     return this.tripRepo.save(trip);
+  }
+
+  async cancel(id: number) {
+    const trip = await this.tripRepo.findOne({ where: { id }, relations: ['bookings'] });
+    if (!trip) throw new NotFoundException('Trip not found');
+
+    if (trip.status === 'CANCELLED') {
+      throw new BadRequestException('Trip is already cancelled');
+    }
+
+    // Update trip status to CANCELLED
+    trip.status = 'CANCELLED';
+    await this.tripRepo.save(trip);
+
+    // TODO: Handle refund logic for all bookings
+    // For now, just return success
+    // In production, you would:
+    // 1. Get all confirmed bookings for this trip
+    // 2. Process refunds via payment provider
+    // 3. Update booking statuses to CANCELLED
+    // 4. Send notification emails to passengers
+
+    return {
+      ok: true,
+      message: 'Trip cancelled successfully',
+      affectedBookings: trip.bookings?.length || 0,
+    };
   }
 
   async delete(id: number) {

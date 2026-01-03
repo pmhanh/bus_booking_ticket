@@ -4,19 +4,20 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { ReportsService } from '../reports/reports.service';
 
 @Controller('dashboard')
 export class DashboardController {
-  @UseGuards(JwtAuthGuard)
+  constructor(private readonly reportsService: ReportsService) {}
+
+  @Roles('admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Get()
-  getWidgets(@CurrentUser() user: JwtPayload) {
+  async getWidgets(@CurrentUser() user: JwtPayload) {
+    const report = await this.reportsService.getAdminSummary({ days: 7 });
     return {
       user,
-      summary: [
-        { label: 'Vé đã bán', value: 482, trend: '+12%' },
-        { label: 'Doanh thu', value: '$18.2k', trend: '+5%' },
-        { label: 'Tỷ lệ đúng giờ', value: '93%', trend: '+2%' },
-      ],
+      summary: report.dashboardSummary,
       activity: [
         { id: 1, message: 'Đơn đặt mới từ Mai Nguyễn', time: '5 phút trước' },
         { id: 2, message: 'Tuyến HN - HCM trễ 10 phút', time: '32 phút trước' },

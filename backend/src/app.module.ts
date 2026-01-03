@@ -27,6 +27,7 @@ import { BookingsModule } from './bookings/bookings.module';
 import { TripSeat } from './trips/trip-seat.entity';
 import { RealtimeModule } from './realtime/realtime.module';
 import { PaymentsModule } from './payments/payments.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -71,7 +72,8 @@ import { PaymentsModule } from './payments/payments.module';
     TripsModule,
     BookingsModule,
     RealtimeModule,
-    PaymentsModule
+    PaymentsModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

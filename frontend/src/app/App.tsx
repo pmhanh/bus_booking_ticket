@@ -14,6 +14,7 @@ import { AdminUsersPage } from '../features/admin/pages/AdminUsersPage';
 import { AdminTripsPage } from '../features/trip/pages/AdminTripsPage';
 import { AdminRoutesPage } from '../features/route/pages/AdminRoutesPage';
 import { AdminSeatMapsPage } from '../features/seatmap/pages/AdminSeatMapsPage';
+import { AdminBusesPage } from '../features/bus/pages/AdminBusesPage';
 import { HomePage } from '../features/booking/pages/HomePage';
 import { SearchResultsPage } from '../features/booking/pages/SearchResultsPage';
 import { TripDetailsPage } from '../features/trip/pages/TripDetailsPage';
@@ -60,6 +61,7 @@ function App() {
         <Route element={<ProtectedRoute role="admin" />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/buses" element={<AdminBusesPage />} />
           <Route path="/admin/trips" element={<AdminTripsPage />} />
           <Route path="/admin/routes" element={<AdminRoutesPage />} />
           <Route path="/admin/seat-maps" element={<AdminSeatMapsPage />} />

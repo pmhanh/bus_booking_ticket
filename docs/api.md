@@ -4,8 +4,8 @@ Base URL: `http://localhost:3000/api`
 
 ## Auth
 - `POST /auth/register` ƒ?" `{ email, password, fullName? }`
-- `POST /auth/login` ƒ?" `{ email, password, remember? }` ƒ+' `{ user, tokens }`
-- `POST /auth/refresh` ƒ?" `{ refreshToken, userId }` ƒ+' new tokens
+- `POST /auth/login` ƒ?" `{ email, password }` ƒ+' `{ user, accessToken }` (sets `refresh_token` cookie)
+- `POST /auth/refresh` ƒ?" (no body) ƒ+' `{ accessToken }` (uses & rotates `refresh_token` cookie)
 - `POST /auth/forgot` ƒ?" `{ email }` (sends/reset token)
 - `POST /auth/reset` ƒ?" `{ token, newPassword }`
 - `POST /auth/change-password` ƒ?" auth required, `{ currentPassword, newPassword }`
@@ -30,7 +30,7 @@ Base URL: `http://localhost:3000/api`
 
 ## Admin ƒ?" Users (auth + role=admin)
 - `GET /admin/users`
-- `PATCH /admin/users/:id/status` ƒ?" `{ status: 'active' | 'suspended' }`
+- `PATCH /admin/users/:id/status` ƒ?" `{ status: 'pending' | 'active' | 'banned' }`
 
 ## Admin ƒ?" Cities & Routes
 - `GET /admin/cities` / `POST /admin/cities`
@@ -53,11 +53,14 @@ Base URL: `http://localhost:3000/api`
 
 ## Admin ƒ?" Trips
 - `GET /admin/trips` ƒ?" filter by `routeId`, `busId`, `fromDate`, `toDate`, `limit`, `offset`
-- `POST /admin/trips` ƒ?" `{ routeId, busId, departureTime, arrivalTime, basePrice, status? }`
+- `POST /admin/trips` ƒ?" `{ routeId, busId, departureTime, arrivalTime, basePrice, status?: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' }`
 - `GET /admin/trips/:id`
 - `PATCH /admin/trips/:id`
 - `DELETE /admin/trips/:id`
 
+## Admin ƒ?" Reports
+- `GET /admin/reports/summary` ƒ?" query: `days` (default 7) hoặc `from=YYYY-MM-DD&to=YYYY-MM-DD` (trả `dashboardSummary`, `daily.bookings`, `topRoutes`, `recentBookings`, ...)
+
 ## Dashboard (sample)
-- `GET /dashboard`
+- `GET /dashboard` (admin only)
 - `GET /dashboard/admin-metrics` (admin only)

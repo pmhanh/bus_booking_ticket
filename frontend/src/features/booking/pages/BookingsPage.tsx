@@ -354,7 +354,6 @@ export const BookingsPage = () => {
 const BookingRow = ({
   booking,
   onCancel,
-  onEdit,
 }: {
   booking: Booking;
   onCancel: (id: string) => void;

@@ -73,13 +73,9 @@ export function BusPhotoUpload({ busId, photos, accessToken, onPhotoChange }: Bu
             disabled={uploading}
             className="hidden"
           />
-          <Button
-            as="span"
-            variant="secondary"
-            disabled={uploading}
-          >
+          <span className={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${uploading ? 'bg-white/5 text-gray-400 cursor-not-allowed' : 'bg-white/10 text-white hover:bg-white/20 cursor-pointer'}`}>
             {uploading ? 'Đang tải...' : 'Tải ảnh lên'}
-          </Button>
+          </span>
         </label>
         <span className="text-xs text-gray-400">
           JPG, PNG, GIF, WEBP (max 5MB)

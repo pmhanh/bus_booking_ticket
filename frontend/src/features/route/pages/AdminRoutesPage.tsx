@@ -35,7 +35,7 @@ export const AdminRoutesPage = () => {
   const { accessToken } = useAuth();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [total, setTotal] = useState(0);
-  const [limit, setLimit] = useState(20);
+  const [limit] = useState(20);
   const [offset, setOffset] = useState(0);
   const [cities, setCities] = useState<City[]>([]);
   const [form, setForm] = useState<RouteForm>({

@@ -3,13 +3,18 @@ import {
   Controller,
   Get,
   HttpCode,
+  MaxFileSizeValidator,
+  ParseFilePipe,
   Post,
   Put,
   UseGuards,
   Query,
   Res,
   Req,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
@@ -23,8 +28,11 @@ import { UpdateProfileDto } from '../users/dto/update-profile.dto';
 import { UsersService } from '../users/users.service';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { VerifyRequestDto } from './dto/verify-request.dto';
-import type { Response, Request, CookieOptions } from 'express';
+import type { Response, Request, CookieOptions, Express } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
+import * as fs from 'fs';
 
 @Controller('auth')
 export class AuthController {
@@ -147,6 +155,46 @@ export class AuthController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.usersService.updateProfile(user.sub, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('avatar')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const dir = join(process.cwd(), 'uploads', 'avatars');
+          fs.mkdirSync(dir, { recursive: true });
+          cb(null, dir);
+        },
+        filename: (req, file, cb) => {
+          const unique = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+          cb(null, `${unique}${extname(file.originalname)}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+          return cb(new Error('Only image files are allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadAvatar(
+    @CurrentUser() user: JwtPayload,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [new MaxFileSizeValidator({ maxSize: 3 * 1024 * 1024 })],
+      }),
+    )
+    file?: Express.Multer.File,
+  ) {
+    if (!file) throw new Error('No file uploaded');
+    const relativePath = `/uploads/avatars/${file.filename}`;
+    const updated = await this.usersService.updateProfile(user.sub, {
+      avatarUrl: relativePath,
+    });
+    return { avatarUrl: relativePath, user: updated };
   }
 
   private setRefreshCookie(res: Response, token: string) {

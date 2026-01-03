@@ -331,7 +331,14 @@ export const HomeSearchForm = ({
           destinationName: d.name,
         });
       } else {
-        navigate(`/search?originId=${o.id}&destinationId=${d.id}&date=${date}`);
+        const params = new URLSearchParams({
+          originId: String(o.id),
+          originName: o.name,
+          destinationId: String(d.id),
+          destinationName: d.name,
+          date,
+        });
+        navigate(`/search?${params.toString()}`);
       }
     },
     [date, today, origin, destination, onSubmit, navigate]

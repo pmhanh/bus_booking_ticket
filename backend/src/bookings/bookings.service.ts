@@ -13,6 +13,7 @@ import {
   Repository,
 } from 'typeorm';
 import * as nodemailer from 'nodemailer';
+import * as QRCode from 'qrcode';
 import { Booking } from './booking.entity';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { Trip } from '../trips/trip.entity';
@@ -206,16 +207,22 @@ export class BookingsService {
   }
 
   async sendTicket(code: string, opts: BookingAccessOptions = {}) {
-    const { booking, content } = await this.ticketContent(code, opts);
+    const { booking, content, qrCodeDataUrl } = await this.ticketContent(code, opts);
     if (booking.status !== 'CONFIRMED')
       throw new BadRequestException('Ticket only available for confirmed bookings');
     if (!this.mailer)
       throw new BadRequestException('Email service not configured');
+
+    const attachment = qrCodeDataUrl ? this.qrAttachment(qrCodeDataUrl, booking) : undefined;
+    const qrCid = attachment?.cid;
+
     await this.mailer.sendMail({
       from: this.mailFrom,
       to: booking.contactEmail,
       subject: `E-ticket for booking ${booking.reference}`,
       text: content,
+      html: this.formatTicketHtml(booking, qrCid, qrCodeDataUrl),
+      attachments: attachment ? [attachment] : undefined,
     });
     return { ok: true };
   }
@@ -403,6 +410,7 @@ export class BookingsService {
     ) {
       this.assertAccess(booking, access);
     }
+
     return booking;
   }
 
@@ -514,22 +522,91 @@ export class BookingsService {
   }
 
 
-  async cancel(code: string, opts: BookingAccessOptions = {}) {
-    const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
-    if (booking.status === 'CONFIRMED') {
-      // tuỳ policy: hoàn tiền / disallow cancel
-      // hiện tại cho cancel vẫn ok nhưng nhớ xử lý refund nếu có payment
-    }
-    booking.status = 'CANCELLED';
-    return this.bookingRepo.save(booking);
+async cancel(code: string, opts: BookingAccessOptions = {}) {
+  const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
+  if (booking.status === 'CANCELLED') return booking;
+  if (booking.status === 'EXPIRED') throw new BadRequestException('Booking đã hết hạn');
+
+  const departureMs = booking.trip?.departureTime ? new Date(booking.trip.departureTime).getTime() : undefined;
+  if (!departureMs || Number.isNaN(departureMs)) throw new BadRequestException('Missing departure time');
+
+  if (departureMs - Date.now() < 3 * 60 * 60 * 1000) {
+    throw new BadRequestException('Bạn phải hủy trước giờ khởi hành ít nhất 3 giờ.');
   }
 
-  async ticketContent(code: string, opts: BookingAccessOptions = {}) {
+  const tripId = booking.trip?.id;
+  const lockToken = (booking as any).lockToken as string | undefined;
+
+  const updated = await this.dataSource.transaction(async (manager) => {
+    const bookingRepo = manager.getRepository(Booking);
+    const tripSeatRepo = manager.getRepository(TripSeat);
+
+    const fresh = await bookingRepo.findOne({
+      where: { id: booking.id } as any,
+      relations: ['trip', 'details', 'details.tripSeat'],
+      order: { details: { id: 'ASC' } } as any,
+    });
+    if (!fresh) throw new NotFoundException('Booking not found');
+    if (fresh.status === 'CANCELLED') return fresh;
+    if (fresh.status === 'EXPIRED') throw new BadRequestException('Booking đã hết hạn');
+
+    const dep = fresh.trip?.departureTime ? new Date(fresh.trip.departureTime).getTime() : undefined;
+    if (!dep || Number.isNaN(dep) || dep - Date.now() < 3 * 60 * 60 * 1000) {
+      throw new BadRequestException('Bạn phải hủy trước giờ khởi hành ít nhất 3 giờ.');
+    }
+
+    // cancel whole booking
+    fresh.status = 'CANCELLED';
+    await bookingRepo.save(fresh);
+
+    // reopen seats
+    const seatIds = (fresh.details ?? []).map((d) => d.tripSeat?.id).filter(Boolean) as number[];
+    if (seatIds.length) {
+      await tripSeatRepo
+        .createQueryBuilder()
+        .update(TripSeat)
+        .set({ isBooked: false, bookedAt: null })
+        .where('id IN (:...ids)', { ids: seatIds })
+        .execute();
+    }
+
+    return fresh;
+  });
+
+  // after commit: unlock redis best-effort
+  const seatCodes = (updated.details ?? []).map((d) => d.seatCodeSnapshot).filter(Boolean);
+
+  if (tripId && lockToken && seatCodes.length) {
+    try {
+      await this.seatLockService.unlockSeats(tripId, seatCodes, lockToken);
+    } catch {}
+  }
+
+  // after commit: websocket broadcast (tuỳ gateway của bạn)
+  if (tripId && seatCodes.length) {
+    // Nếu bạn có event riêng cho seat available thì dùng nó
+    if ((this.seatGateway as any).emitSeatAvailable) {
+      (this.seatGateway as any).emitSeatAvailable(tripId, seatCodes);
+    } else if ((this.seatGateway as any).emitSeatUpdated) {
+      (this.seatGateway as any).emitSeatUpdated(tripId, seatCodes);
+    } else {
+      // fallback: emit booked để client refresh (không lý tưởng, nhưng còn hơn không)
+      this.seatGateway.emitSeatBooked(tripId, seatCodes);
+    }
+  }
+
+  return updated;
+}
+
+
+
+async ticketContent(code: string, opts: BookingAccessOptions = {}) {
     const booking = await this.getBooking(code, { ...opts, requireContactForGuest: true });
     if (booking.status !== 'CONFIRMED')
       throw new BadRequestException('Ticket only available for confirmed bookings');
 
     const seatList = (booking.details ?? []).map((d) => d.seatCodeSnapshot).join(', ');
+    const qrCodeDataUrl = await this.generateQrCode(booking.reference || booking.id);
 
     const lines = [
       `Booking Reference: ${booking.reference}`,
@@ -539,7 +616,7 @@ export class BookingsService {
       `Status: ${booking.status}`,
       `Contact: ${booking.contactName} (${booking.contactEmail})`,
     ];
-    return { booking, content: lines.join('\n') };
+    return { booking, content: lines.join('\n'), qrCodeDataUrl };
   }
 
   private formatTicketContent(booking: Booking) {
@@ -559,15 +636,57 @@ export class BookingsService {
     return lines.join('\n');
   }
 
+  private formatTicketHtml(booking: Booking, qrCid?: string, qrDataUrl?: string) {
+    const seats = (booking.details ?? []).map((d) => d.seatCodeSnapshot).join(', ');
+    const depart = booking.trip.departureTime.toISOString();
+    const arrive = booking.trip.arrivalTime.toISOString();
+    const qrImgSrc = qrCid ? `cid:${qrCid}` : qrDataUrl;
+
+    return `
+      <div style="font-family: Arial, sans-serif; color: #0f172a;">
+        <h2>E-ticket for booking ${booking.reference || booking.id}</h2>
+        <p>Status: ${booking.status}</p>
+        <p>Route: ${booking.trip.route.originCity.name} -> ${booking.trip.route.destinationCity.name}</p>
+        <p>Departure: ${depart}</p>
+        <p>Arrival: ${arrive}</p>
+        <p>Seats: ${seats}</p>
+        <p>Contact: ${booking.contactName} (${booking.contactEmail || booking.contactPhone || ''})</p>
+        ${qrImgSrc ? `<div style="margin-top:12px;"><div>QR code:</div><img src="${qrImgSrc}" alt="Booking QR" style="max-width:200px;" /></div>` : ''}
+      </div>
+    `;
+  }
+
+  private qrAttachment(dataUrl: string, booking: Booking) {
+    const match = dataUrl.match(/^data:(.+);base64,(.+)$/);
+    if (!match) return undefined;
+    const [, mime, b64] = match;
+    return {
+      filename: `ticket-${booking.reference || booking.id}.png`,
+      content: Buffer.from(b64, 'base64'),
+      contentType: mime,
+      cid: `booking-qr-${booking.id}`,
+    };
+  }
+
+  private async generateQrCode(value: string) {
+    return QRCode.toDataURL(value, { errorCorrectionLevel: 'M', margin: 1, scale: 6 });
+  }
+
   private async trySendTicket(booking: Booking) {
     if (!this.mailer) return;
     if (!booking.contactEmail) return;
     const text = this.formatTicketContent(booking);
+    const qrCodeDataUrl = await this.generateQrCode(booking.reference || booking.id);
+    const attachment = qrCodeDataUrl ? this.qrAttachment(qrCodeDataUrl, booking) : undefined;
+    const qrCid = attachment?.cid;
+
     await this.mailer.sendMail({
       from: this.mailFrom,
       to: booking.contactEmail,
       subject: `E-ticket for booking ${booking.reference}`,
       text,
+      html: this.formatTicketHtml(booking, qrCid, qrCodeDataUrl),
+      attachments: attachment ? [attachment] : undefined,
     });
   }
 

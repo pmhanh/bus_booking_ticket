@@ -67,11 +67,24 @@ export async function cancelBooking(
   token?: string | null,
   contact?: { phone?: string; email?: string },
 ) {
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  // IMPORTANT: backend expects contactEmail/contactPhone (CancelBookingDto)
+  const body =
+    token
+      ? undefined // logged-in: no need to send contact
+      : JSON.stringify({
+          contactPhone: contact?.phone,
+          contactEmail: contact?.email,
+        });
+
   return apiClient<Booking>(`/bookings/${id}/cancel`, {
     method: 'PATCH',
     headers,
-    body: JSON.stringify(contact || {}),
+    body,
   });
 }
 

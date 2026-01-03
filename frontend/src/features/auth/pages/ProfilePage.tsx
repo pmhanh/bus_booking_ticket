@@ -1,10 +1,10 @@
 import type { FormEvent } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../../shared/components/ui/Button';
 import { Card } from '../../../shared/components/ui/Card';
 import { FormField } from '../../../shared/components/ui/FormField';
 import { useAuth } from '../context/AuthContext';
-import { apiClient } from '../../../shared/api/api';
+import { api, apiClient } from '../../../shared/api/api';
 import { useToast } from '../../../shared/providers/ToastProvider';
 
 type ProfileForm = {
@@ -20,6 +20,9 @@ type FieldErrors = {
 export const ProfilePage = () => {
   const { user, refresh, accessToken } = useAuth();
   const { showMessage } = useToast();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const fileBase = apiBase.replace(/\/api$/, '');
 
   const [profile, setProfile] = useState<ProfileForm>({
     fullName: user?.fullName || '',
@@ -28,6 +31,7 @@ export const ProfilePage = () => {
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     setProfile({
@@ -93,9 +97,67 @@ export const ProfilePage = () => {
     }
   };
 
+  const avatarSrc = useMemo(() => {
+    const url = user?.avatarUrl || '';
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return `${fileBase}${url}`;
+  }, [fileBase, user?.avatarUrl]);
+
+  const handleAvatarUpload = async (file?: File | null) => {
+    if (!file) return;
+    if (!accessToken) {
+      showMessage({ type: 'error', title: 'Chưa đăng nhập', message: 'Bạn chưa đăng nhập.' });
+      return;
+    }
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      setUploading(true);
+      await api.post('/auth/avatar', form, {
+        headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${accessToken}` },
+      });
+      showMessage({ type: 'success', title: 'Thành công', message: 'Đã cập nhật ảnh đại diện' });
+      await refresh();
+    } catch (err) {
+      const msg =
+        (err as any)?.response?.data?.message || (err as Error)?.message || 'Tải ảnh thất bại, thử lại.';
+      showMessage({ type: 'error', title: 'Lỗi', message: msg });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <Card title="Hồ sơ">
+        <div className="flex items-center gap-4 mb-4">
+          <div className="h-16 w-16 rounded-full bg-white/10 border border-white/10 overflow-hidden grid place-items-center text-white text-lg font-semibold">
+            {avatarSrc ? (
+              <img src={avatarSrc} alt="avatar" className="h-full w-full object-cover" />
+            ) : (
+              (user?.fullName?.[0] || user?.email?.[0] || '?').toUpperCase()
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? 'Đang tải...' : 'Đổi ảnh đại diện'}
+            </Button>
+          </div>
+        </div>
         <form className="space-y-3" onSubmit={updateProfile}>
           <FormField label="Email" value={user?.email ?? ''} disabled className="opacity-60 cursor-not-allowed" />
 

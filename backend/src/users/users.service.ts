@@ -14,9 +14,10 @@ export class UsersService {
   ) {}
 
   findByEmail(email: string) {
-    return this.repo.findOne({ 
+    return this.repo.findOne({
       where: { email },
-      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'phone'] });
+      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'phone', 'avatarUrl'],
+    });
   }
 
   findByEmailWithPassword(email: string) {
@@ -30,29 +31,30 @@ export class UsersService {
         'status',
         'verified',
         'passwordHash',
-        'phone'
+        'phone',
+        'avatarUrl',
       ],
     });
   }
 
   findById(id: string) {
-    return this.repo.findOne({ 
+    return this.repo.findOne({
       where: { id },
-      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'phone'] 
+      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'phone', 'avatarUrl'],
     });
   }
 
   findByIdWithPassword(id: string) {
     return this.repo.findOne({
       where: { id },
-      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'passwordHash', 'phone'],
+      select: ['id', 'email', 'fullName', 'role', 'status', 'verified', 'passwordHash', 'phone', 'avatarUrl'],
     });
   }
 
   findByIdWithRefreshToken(id: string) {
     return this.repo.findOne({
       where: { id },
-      select: ['id', 'email', 'role', 'refreshTokenHash', 'phone'],
+      select: ['id', 'email', 'role', 'refreshTokenHash', 'phone', 'avatarUrl'],
     });
   }
 

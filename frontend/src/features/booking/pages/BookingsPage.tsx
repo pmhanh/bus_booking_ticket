@@ -7,10 +7,49 @@ import { useAuth } from '../../auth/context/AuthContext';
 import { useBooking } from '../context/BookingContext';
 import type { Booking } from '../types/booking';
 import { cancelBooking, getMyBookings, lookupBooking, updateBooking } from '../api/bookings';
+import { useToast } from '../../../shared/providers/ToastProvider';
+
+const normalizePassengers = (booking: any) => {
+  const passengers = booking?.passengers;
+  if (Array.isArray(passengers)) return passengers;
+
+  const alt = booking?.passengerInfos;
+  if (Array.isArray(alt)) return alt;
+
+  const tickets = booking?.tickets;
+  if (Array.isArray(tickets)) return tickets;
+
+  const details = booking?.details;
+  if (Array.isArray(details)) {
+    return details.map((d: any) => ({
+      seatCode: d.seatCode ?? d.seatCodeSnapshot ?? d.tripSeat?.seatCodeSnapshot ?? d.tripSeat?.seatCode ?? '',
+      name: d.name ?? d.passengerName ?? '',
+      phone: d.phone ?? d.passengerPhone ?? undefined,
+      idNumber: d.idNumber ?? d.passengerIdNumber ?? undefined,
+      price: Number(d.price ?? d.priceSnapshot ?? d.tripSeat?.price ?? booking?.trip?.basePrice ?? 0),
+    }));
+  }
+
+  return [];
+};
+
+const withPassengers = (booking: any): Booking => ({
+  ...booking,
+  passengers: normalizePassengers(booking),
+});
+
+const canCancelBefore3Hours = (departureTime?: string | Date | null) => {
+  if (!departureTime) return false;
+  const dep = new Date(departureTime).getTime();
+  if (Number.isNaN(dep)) return false;
+  return dep - Date.now() >= 3 * 60 * 60 * 1000;
+};
+
 
 export const BookingsPage = () => {
   const { user, accessToken } = useAuth();
   const { setContact } = useBooking();
+  const { showMessage } = useToast();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,19 +73,72 @@ export const BookingsPage = () => {
     if (!accessToken) return;
     setLoading(true);
     getMyBookings(accessToken)
-      .then(setBookings)
+      .then((data) => setBookings(data.map(withPassengers)))
       .catch((err) => setError(err.message || 'Không thể tải danh sách đặt chỗ'))
       .finally(() => setLoading(false));
   }, [accessToken]);
 
-  const handleCancel = async (id: string) => {
-    const contact = lookupResult?.id === id ? { phone: lookupPhone, email: lookupEmail } : undefined;
-    const confirmed = window.confirm('Bạn chắc muốn huỷ đặt chỗ này?');
-    if (!confirmed) return;
-    await cancelBooking(id, accessToken, contact);
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'CANCELLED' } : b)));
-    if (lookupResult?.id === id) setLookupResult({ ...lookupResult, status: 'CANCELLED' });
-  };
+    const handleCancel = async (id: string) => {
+  const booking =
+    bookings.find((x) => x.id === id) || (lookupResult?.id === id ? lookupResult : null);
+
+  if (!booking) {
+    showMessage({ type: 'error', message: 'Không tìm thấy booking để hủy.' });
+    return;
+  }
+
+  const departureTime = booking.trip?.departureTime;
+
+  if (!canCancelBefore3Hours(departureTime)) {
+    showMessage({
+      type: 'error',
+      message: 'Không thể hủy: phải hủy trước giờ khởi hành ít nhất 3 giờ.',
+    });
+    return;
+  }
+
+  const policy =
+    'Chính sách hoàn tiền: tùy nhà xe/cổng thanh toán. Tiền (nếu có) sẽ được xử lý theo quy định.';
+
+  const ok = window.confirm(
+    `Bạn chắc muốn HỦY booking ${booking.reference || booking.id}?\n\n${policy}`,
+  );
+  if (!ok) return;
+
+  try {
+    showMessage({ type: 'info', message: `Đang hủy booking... ${policy}` });
+
+    // guest cancel: nếu không có accessToken thì gửi contact để verify (backend của bạn có assertAccess)
+    const contact =
+  !accessToken
+    ? { phone: booking.contactPhone || lookupPhone || undefined, email: booking.contactEmail || lookupEmail || undefined }
+    : undefined;
+
+    const updated = await cancelBooking(id, accessToken, contact);
+
+    // Update list (ưu tiên data trả về từ backend nếu có)
+    setBookings((prev) =>
+      prev.map((b) => (b.id === id ? withPassengers(updated) : b)),
+    );
+
+    if (lookupResult?.id === id) setLookupResult(withPassengers(updated));
+
+    // nếu đang mở editor của booking này thì đóng luôn
+    if (editing?.id === id) setEditing(null);
+
+    showMessage({
+      type: 'success',
+      message: `Đã hủy booking ${booking.reference || booking.id}. ${policy}`,
+    });
+  } catch (e) {
+    showMessage({
+      type: 'error',
+      message: (e as Error)?.message || 'Hủy booking thất bại.',
+    });
+  }
+};
+
+
 
   const handleLookup = async () => {
     if (!lookupCode && !lookupPhone && !lookupEmail) {
@@ -59,20 +151,10 @@ export const BookingsPage = () => {
     setLookupResult(null);
     setLookupFieldError(false);
     try {
-      const booking = await lookupBooking(lookupCode, lookupPhone, lookupEmail);
+      const booking = withPassengers(await lookupBooking(lookupCode, lookupPhone, lookupEmail));
       setLookupResult(booking);
       setContact({ phone: booking.contactPhone, email: booking.contactEmail || undefined });
-      setEditing(booking);
-      setEditContact({ name: booking.contactName, phone: booking.contactPhone, email: booking.contactEmail || '' });
-      setEditPassengers(
-        booking.passengers.map((p) => ({
-          seatCode: p.seatCode,
-          name: p.name,
-          phone: p.phone,
-          idNumber: p.idNumber,
-          price: p.price,
-        })),
-      );
+      startEdit(booking);
     } catch (err) {
       setLookupError((err as Error)?.message || 'Không tìm thấy đặt chỗ');
     } finally {
@@ -81,10 +163,11 @@ export const BookingsPage = () => {
   };
 
   const startEdit = (booking: Booking) => {
-    setEditing(booking);
+    const passengers = normalizePassengers(booking);
+    setEditing({ ...booking, passengers });
     setEditContact({ name: booking.contactName, phone: booking.contactPhone, email: booking.contactEmail || '' });
     setEditPassengers(
-      booking.passengers.map((p) => ({
+      passengers.map((p) => ({
         seatCode: p.seatCode,
         name: p.name,
         phone: p.phone,
@@ -118,9 +201,11 @@ export const BookingsPage = () => {
         },
         accessToken,
       );
-      setBookings((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
-      if (lookupResult?.id === updated.id) setLookupResult(updated);
-      setEditing(updated);
+      setBookings((prev) =>
+        prev.map((b) => (b.id === updated.id ? ({ ...withPassengers(updated), passengers: editPassengers } as Booking) : b)),
+      );
+      if (lookupResult?.id === updated.id) setLookupResult({ ...withPassengers(updated), passengers: editPassengers });
+      setEditing({ ...withPassengers(updated), passengers: editPassengers });
     } catch (err) {
       setEditError((err as Error)?.message || 'Không thể lưu thay đổi');
     } finally {
@@ -132,7 +217,6 @@ export const BookingsPage = () => {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase text-gray-400">Bookings</p>
           <h1 className="text-3xl font-bold text-white">Quản lý đặt chỗ</h1>
         </div>
         <Link to="/search">
@@ -275,31 +359,32 @@ const BookingRow = ({
   booking: Booking;
   onCancel: (id: string) => void;
   onEdit?: (booking: Booking) => void;
-}) => (
-  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-    <div className="space-y-1">
-      <div className="flex items-center gap-2 text-white font-semibold">
-        <span>{booking.trip?.route?.originCity?.name || 'N/A'}</span>
-        <span className="text-gray-500">{"->"}</span>
-        <span>{booking.trip?.route?.destinationCity?.name || 'N/A'}</span>
+}) => {
+  const bookingWithPassengers = withPassengers(booking);
+  const seatCodes = bookingWithPassengers.passengers.map((p) => p.seatCode).filter(Boolean);
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-white font-semibold">
+          <span>{booking.trip?.route?.originCity?.name || 'N/A'}</span>
+          <span className="text-gray-500">{"->"}</span>
+          <span>{booking.trip?.route?.destinationCity?.name || 'N/A'}</span>
+        </div>
+        <div className="text-xs text-gray-400">
+          {booking.trip?.departureTime ? new Date(booking.trip.departureTime).toLocaleString() : 'No departure time'} - Ghe: {seatCodes.join(', ')}
+        </div>
+        <div className="text-xs text-emerald-200">Ma: {booking.reference || booking.id}</div>
       </div>
-      <div className="text-xs text-gray-400">
-        {booking.trip?.departureTime ? new Date(booking.trip.departureTime).toLocaleString() : 'No departure time'} · Ghế: {(booking.passengers || []).map((p) => p.seatCode).join(', ')}
-      </div>
-      <div className="text-xs text-emerald-200">Mã: {booking.reference || booking.id}</div>
-    </div>
-    <div className="flex items-center gap-2">
-      <Link to={`/bookings/${booking.id}/ticket`} state={{ booking }}>
-        <Button variant="secondary">Xem vé</Button>
-      </Link>
-      <Button variant="ghost" onClick={() => onCancel(booking.id)} disabled={booking.status === 'CANCELLED'}>
-        {booking.status === 'CANCELLED' ? 'Đã huỷ' : 'Huỷ vé'}
-      </Button>
-      {onEdit ? (
-        <Button variant="ghost" onClick={() => onEdit(booking)}>
-          Chỉnh sửa
+      <div className="flex items-center gap-2">
+        <Link to={`/bookings/${booking.id}/ticket`} state={{ booking: bookingWithPassengers }}>
+          <Button variant="secondary">Xem vé</Button>
+        </Link>
+        <Button variant="ghost" onClick={() => onCancel(booking.id)} disabled={booking.status === 'CANCELLED'}>
+          {booking.status === 'CANCELLED' ? 'đã hủy' : 'Hủy vé'}
         </Button>
-      ) : null}
+        
+      </div>
     </div>
-  </div>
-);
+  );
+};

@@ -115,18 +115,18 @@ export const AdminTripsPage = () => {
 
   const loadData = useCallback(async () => {
     if (!accessToken) return;
-    setLoading(true);
+      setLoading(true);
     try {
       const [routeRes, busRes, cityRes] = await Promise.all([
-        apiClient<Route[]>('/admin/routes', { headers }),
+        apiClient<{ routes: Route[] }>('/admin/routes', { headers }),
         apiClient<Bus[]>('/admin/buses', { headers }),
         apiClient<City[]>('/admin/cities', { headers }),
       ]);
-      setRoutes(routeRes);
-      routesRef.current = routeRes;
+      setRoutes(routeRes.routes);
+      routesRef.current = routeRes.routes;
       setBuses(busRes);
       setCities(cityRes);
-      await loadTrips(routeRes);
+      await loadTrips(routeRes.routes);
     } finally {
       setLoading(false);
     }

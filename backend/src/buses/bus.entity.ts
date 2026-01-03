@@ -32,6 +32,12 @@ export class Bus {
   @Column('text', { array: true, default: '{}' })
   amenities: string[];
 
+  @Column('text', { array: true, default: '{}' })
+  photos: string[];
+
+  @Column({ default: true })
+  isActive: boolean;
+
   @ManyToOne(() => SeatMap, { nullable: true, eager: true })
   @JoinColumn({ name: 'seat_map_id' })
   seatMap?: SeatMap | null;

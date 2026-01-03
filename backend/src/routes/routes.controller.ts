@@ -33,11 +33,17 @@ export class RoutesController {
   list(
     @Query('originCityId') originCityId?: string,
     @Query('destinationCityId') destinationCityId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
     const filter: { originCityId?: number; destinationCityId?: number } = {};
     if (originCityId) filter.originCityId = Number(originCityId);
     if (destinationCityId) filter.destinationCityId = Number(destinationCityId);
-    return this.routesService.findAll(filter);
+    const pagination = {
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    };
+    return this.routesService.findAll(filter, pagination);
   }
 
   @Get(':id')
@@ -63,5 +69,15 @@ export class RoutesController {
   @Get(':id/stops')
   getStops(@Param('id', ParseIntPipe) id: number) {
     return this.routesService.getStops(id);
+  }
+
+  @Patch(':id/deactivate')
+  deactivate(@Param('id', ParseIntPipe) id: number) {
+    return this.routesService.deactivate(id);
+  }
+
+  @Patch(':id/activate')
+  activate(@Param('id', ParseIntPipe) id: number) {
+    return this.routesService.activate(id);
   }
 }

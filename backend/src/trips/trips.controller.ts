@@ -70,4 +70,25 @@ export class TripsController {
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.tripsService.delete(id);
   }
+
+  @Get(':id/passengers')
+  getPassengers(@Param('id', ParseIntPipe) id: number) {
+    return this.tripsService.getPassengers(id);
+  }
+
+  @Patch(':id/passengers/:bookingDetailId/check-in')
+  checkInPassenger(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('bookingDetailId', ParseIntPipe) bookingDetailId: number,
+  ) {
+    return this.tripsService.checkInPassenger(id, bookingDetailId);
+  }
+
+  @Patch(':id/operational-status')
+  updateOperationalStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { status: 'DEPARTED' | 'ARRIVED' },
+  ) {
+    return this.tripsService.updateOperationalStatus(id, body.status);
+  }
 }

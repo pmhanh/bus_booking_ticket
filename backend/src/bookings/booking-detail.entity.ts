@@ -40,4 +40,7 @@ export class BookingDetail {
 
   @Column({ nullable: true })
   passengerIdNumber?: string;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  checkedInAt?: Date | null;
 }

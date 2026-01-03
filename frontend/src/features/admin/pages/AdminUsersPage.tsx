@@ -10,6 +10,8 @@ export const AdminUsersPage = () => {
   const { accessToken } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [filters, setFilters] = useState({ search: "", role: "", status: "" });
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [selectedRole, setSelectedRole] = useState<string>("");
 
   useEffect(() => {
     if (!accessToken) return;
@@ -29,6 +31,30 @@ export const AdminUsersPage = () => {
       body: { status: nextStatus },
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+    setFilters({ ...filters });
+  };
+
+  const startEditRole = (user: User) => {
+    setEditingUser(user);
+    setSelectedRole(user.role);
+  };
+
+  const cancelEditRole = () => {
+    setEditingUser(null);
+    setSelectedRole("");
+  };
+
+  const confirmEditRole = async () => {
+    if (!editingUser || !selectedRole) return;
+
+    await apiClient<User>(`/admin/users/${editingUser.id}/role`, {
+      method: "PATCH",
+      body: { role: selectedRole },
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    setEditingUser(null);
+    setSelectedRole("");
     setFilters({ ...filters });
   };
 
@@ -85,8 +111,11 @@ export const AdminUsersPage = () => {
                   {u.status === "active" ? "Active" : u.status === "pending" ? "Pending" : "Banned"}
                 </span>
               </div>
-              <div className="text-right">
-                <Button variant="secondary" onClick={() => toggleStatus(u)}>
+              <div className="text-right space-x-2">
+                <Button variant="secondary" onClick={() => startEditRole(u)}>
+                  Edit Role
+                </Button>
+                <Button variant="ghost" onClick={() => toggleStatus(u)}>
                   {u.status === "banned" ? "Activate" : "Ban"}
                 </Button>
               </div>
@@ -94,6 +123,53 @@ export const AdminUsersPage = () => {
           ))}
         </div>
       </Card>
+
+      {editingUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="max-w-md w-full mx-4">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-xl font-bold text-white">Edit User Role</h3>
+                <p className="text-sm text-gray-400 mt-1">
+                  Changing role for: <span className="text-white font-semibold">{editingUser.email}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Select Role
+                </label>
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                  className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
+                >
+                  <option value="user" style={{ color: '#111' }}>User</option>
+                  <option value="agent" style={{ color: '#111' }}>Agent</option>
+                  <option value="admin" style={{ color: '#111' }}>Admin</option>
+                </select>
+              </div>
+
+              {selectedRole === 'admin' && (
+                <div className="bg-yellow-600/20 border border-yellow-600/30 rounded-lg p-3">
+                  <p className="text-sm text-yellow-200">
+                    ⚠️ Warning: Granting admin role gives full system access.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="secondary" onClick={cancelEditRole}>
+                  Cancel
+                </Button>
+                <Button onClick={confirmEditRole} disabled={!selectedRole || selectedRole === editingUser.role}>
+                  Confirm Change
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

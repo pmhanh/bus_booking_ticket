@@ -42,6 +42,12 @@ type BookingContextValue = {
   contact: Contact;
   setContact: (data: Partial<Contact>) => void;
 
+  pickupStopId: number | null;
+  setPickupStopId: (id: number | null) => void;
+
+  dropoffStopId: number | null;
+  setDropoffStopId: (id: number | null) => void;
+
   totalPrice: number;
 
   clear: () => void;
@@ -57,6 +63,8 @@ export const BookingProvider = ({ children }: { children: React.ReactNode }) => 
   const [hold, _setHold] = useState<HoldState | null>(null);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [contact, _setContact] = useState<Contact>(EMPTY_CONTACT);
+  const [pickupStopId, setPickupStopId] = useState<number | null>(null);
+  const [dropoffStopId, setDropoffStopId] = useState<number | null>(null);
 
   const setTrip = useCallback((t: TripLike | null) => _setTrip(t), []);
 
@@ -99,6 +107,8 @@ export const BookingProvider = ({ children }: { children: React.ReactNode }) => 
     _setHold(null);
     setPassengers([]);
     _setContact(EMPTY_CONTACT);
+    setPickupStopId(null);
+    setDropoffStopId(null);
   }, []);
 
   const value: BookingContextValue = useMemo(
@@ -115,6 +125,10 @@ export const BookingProvider = ({ children }: { children: React.ReactNode }) => 
       updatePassenger,
       contact,
       setContact,
+      pickupStopId,
+      setPickupStopId,
+      dropoffStopId,
+      setDropoffStopId,
       totalPrice,
       clear,
     }),
@@ -129,6 +143,8 @@ export const BookingProvider = ({ children }: { children: React.ReactNode }) => 
       updatePassenger,
       contact,
       setContact,
+      pickupStopId,
+      dropoffStopId,
       totalPrice,
       clear,
     ],

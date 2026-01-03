@@ -28,6 +28,7 @@ import { BookingDetail } from './booking-detail.entity';
 import { TripSeat } from 'src/trips/trip-seat.entity';
 import { SeatLockService } from 'src/redis/seat-lock.service';
 import { SeatGateway } from 'src/realtime/seat.gateway';
+import { RouteStop } from '../routes/route-stop.entity';
 
 type BookingAccessOptions = {
   userId?: string;
@@ -308,6 +309,38 @@ export class BookingsService {
       const basePrice = (await manager.getRepository(Trip)
                         .findOne({ where: { id: dto.tripId } }))!.basePrice;
 
+      // Validate pickup/dropoff stops if provided
+      let pickupStop: RouteStop | null = null;
+      let dropoffStop: RouteStop | null = null;
+
+      if (dto.pickupStopId || dto.dropoffStopId) {
+        const trip = await manager.getRepository(Trip).findOne({
+          where: { id: dto.tripId },
+          relations: ['route', 'route.stops'],
+        });
+        if (!trip) throw new NotFoundException('Trip not found');
+
+        if (dto.pickupStopId) {
+          pickupStop = trip.route.stops?.find(s => s.id === dto.pickupStopId) || null;
+          if (!pickupStop) {
+            throw new BadRequestException('Invalid pickupStopId for this trip');
+          }
+          if (pickupStop.type !== 'PICKUP') {
+            throw new BadRequestException('Selected stop is not a pickup point');
+          }
+        }
+
+        if (dto.dropoffStopId) {
+          dropoffStop = trip.route.stops?.find(s => s.id === dto.dropoffStopId) || null;
+          if (!dropoffStop) {
+            throw new BadRequestException('Invalid dropoffStopId for this trip');
+          }
+          if (dropoffStop.type !== 'DROPOFF') {
+            throw new BadRequestException('Selected stop is not a dropoff point');
+          }
+        }
+      }
+
       const booking = new Booking();
       (booking as any).trip = { id: dto.tripId };
       (booking as any).userId = userId ?? undefined;
@@ -317,6 +350,8 @@ export class BookingsService {
       (booking as any).contactName = dto.contactName;
       (booking as any).contactEmail = dto.contactEmail;
       (booking as any).contactPhone = dto.contactPhone ?? undefined;
+      (booking as any).pickupStop = pickupStop ? { id: dto.pickupStopId } : null;
+      (booking as any).dropoffStop = dropoffStop ? { id: dto.dropoffStopId } : null;
       (booking as any).totalPrice = tripSeats.reduce(
         (sum, seat) => sum + (seat.price ?? basePrice),
         0,

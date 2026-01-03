@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { Trip } from '../trips/trip.entity';
 import { BookingDetail } from './booking-detail.entity';
+import { RouteStop } from '../routes/route-stop.entity';
 
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'EXPIRED';
 
@@ -50,6 +51,14 @@ export class Booking {
 
   @Column({ type: 'varchar', length: 64, nullable: true })
   lockToken?: string | null;
+
+  @ManyToOne(() => RouteStop, { nullable: true, eager: true })
+  @JoinColumn({ name: 'pickup_stop_id' })
+  pickupStop?: RouteStop | null;
+
+  @ManyToOne(() => RouteStop, { nullable: true, eager: true })
+  @JoinColumn({ name: 'dropoff_stop_id' })
+  dropoffStop?: RouteStop | null;
 
   @OneToMany(() => BookingDetail, (d) => d.booking, { cascade: true })
   details: BookingDetail[];

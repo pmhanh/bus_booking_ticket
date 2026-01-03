@@ -8,6 +8,6 @@ export type Trip = {
   departureTime: string;
   arrivalTime: string;
   basePrice: number;
-  status: 'SCHEDULED' | 'CANCELLED' | 'COMPLETED';
+  status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   durationMinutes?: number;
 };

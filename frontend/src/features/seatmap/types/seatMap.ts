@@ -32,7 +32,7 @@ export type SeatAvailability = {
     basePrice: number;
     departureTime: string;
     arrivalTime: string;
-    status: 'SCHEDULED' | 'CANCELLED' | 'COMPLETED';
+    status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
     route: Route;
     bus: Bus;
   };

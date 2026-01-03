@@ -26,6 +26,6 @@ export class CreateTripDto {
   basePrice: number;
 
   @IsOptional()
-  @IsIn(['SCHEDULED', 'CANCELLED', 'COMPLETED'])
-  status?: 'SCHEDULED' | 'CANCELLED' | 'COMPLETED';
+  @IsIn(['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'])
+  status?: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 }

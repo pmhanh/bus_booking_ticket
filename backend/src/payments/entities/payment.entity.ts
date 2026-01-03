@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 
 export type PaymentProvider = 'MOMO' | 'STRIPE';
-export type PaymentStatus = 'INIT' | 'PENDING' | 'SUCCESS' | 'FAILED';
+export type PaymentStatus = 'INIT' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED';
 
 @Entity({ name: 'payments' })
 @Index('idx_payments_booking', ['bookingId'])
@@ -56,6 +56,19 @@ export class Payment {
 
   @Column({ type: 'jsonb', nullable: true })
   raw?: any;
+
+  // Refund fields
+  @Column({ type: 'int', nullable: true })
+  refundAmount?: number;
+
+  @Column({ type: 'text', nullable: true })
+  refundReason?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  refundMethod?: 'MANUAL' | 'GATEWAY';
+
+  @Column({ type: 'timestamptz', nullable: true })
+  refundedAt?: Date;
 
   @CreateDateColumn()
   createdAt: Date;

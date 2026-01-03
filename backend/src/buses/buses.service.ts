@@ -66,4 +66,10 @@ export class BusesService {
     await this.busRepo.save(bus);
     return bus;
   }
+
+  async delete(id: number) {
+    const result = await this.busRepo.delete(id);
+    if (!result.affected) throw new NotFoundException('Bus not found');
+    return { ok: true };
+  }
 }

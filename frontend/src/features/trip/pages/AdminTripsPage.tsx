@@ -8,7 +8,6 @@ import type { Trip } from '../types/trip';
 import type { Route } from '../../route/types/route';
 import type { Bus } from '../../bus/types/bus';
 import type { City } from '../../route/types/city';
-import type { SeatMap } from '../../seatmap/types/seatMap';
 
 type TripForm = {
   id?: number;
@@ -17,10 +16,25 @@ type TripForm = {
   departureTime: string;
   arrivalTime: string;
   basePrice: number | '';
+  status: Trip['status'];
 };
 
 const optionTextStyle: React.CSSProperties = { color: '#111' };
 const placeholderOptionStyle: React.CSSProperties = { color: '#666' };
+
+const tripStatusLabel: Record<Trip['status'], string> = {
+  SCHEDULED: 'Đã lên lịch',
+  IN_PROGRESS: 'Đang chạy',
+  COMPLETED: 'Hoàn thành',
+  CANCELLED: 'Đã huỷ',
+};
+
+const tripStatusBadgeClass: Record<Trip['status'], string> = {
+  SCHEDULED: 'bg-green-600/30 text-green-300',
+  IN_PROGRESS: 'bg-blue-600/30 text-blue-200',
+  COMPLETED: 'bg-white/10 text-gray-200',
+  CANCELLED: 'bg-error/30 text-error',
+};
 
 const parseSelectNumber = (value: string): number | '' => {
   if (value === '') return '';
@@ -32,7 +46,6 @@ export const AdminTripsPage = () => {
   const { accessToken } = useAuth();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [buses, setBuses] = useState<Bus[]>([]);
-  const [seatMaps, setSeatMaps] = useState<SeatMap[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,6 +56,7 @@ export const AdminTripsPage = () => {
     departureTime: '',
     arrivalTime: '',
     basePrice: '',
+    status: 'SCHEDULED',
   });
 
   const [filters, setFilters] = useState<{
@@ -50,23 +64,13 @@ export const AdminTripsPage = () => {
     busId?: number | '';
     fromDate?: string;
     toDate?: string;
+    status?: string;
+    sortBy?: string;
     originCityId?: number | '';
     destinationCityId?: number | '';
   }>({});
 
   const [apiMessage, setApiMessage] = useState('');
-  const [busMessage, setBusMessage] = useState('');
-  const [busForm, setBusForm] = useState<{
-    name: string;
-    plateNumber: string;
-    busType?: string;
-    seatMapId?: number | '';
-  }>({
-    name: '',
-    plateNumber: '',
-    busType: 'STANDARD',
-    seatMapId: '',
-  });
 
   const routesRef = useRef<Route[]>([]);
 
@@ -80,6 +84,8 @@ export const AdminTripsPage = () => {
       if (filters.busId) params.append('busId', String(filters.busId));
       if (filters.fromDate) params.append('fromDate', filters.fromDate);
       if (filters.toDate) params.append('toDate', filters.toDate);
+      if (filters.status) params.append('status', filters.status);
+      if (filters.sortBy) params.append('sortBy', filters.sortBy);
 
       try {
         const res = await apiClient<Trip[]>(`/admin/trips?${params.toString()}`, { headers });
@@ -111,17 +117,15 @@ export const AdminTripsPage = () => {
     if (!accessToken) return;
     setLoading(true);
     try {
-      const [routeRes, busRes, cityRes, seatMapRes] = await Promise.all([
+      const [routeRes, busRes, cityRes] = await Promise.all([
         apiClient<Route[]>('/admin/routes', { headers }),
         apiClient<Bus[]>('/admin/buses', { headers }),
         apiClient<City[]>('/admin/cities', { headers }),
-        apiClient<SeatMap[]>('/admin/seat-maps', { headers }),
       ]);
       setRoutes(routeRes);
       routesRef.current = routeRes;
       setBuses(busRes);
       setCities(cityRes);
-      setSeatMaps(seatMapRes);
       await loadTrips(routeRes);
     } finally {
       setLoading(false);
@@ -148,6 +152,7 @@ export const AdminTripsPage = () => {
       departureTime: '',
       arrivalTime: '',
       basePrice: '',
+      status: 'SCHEDULED',
     });
   };
 
@@ -160,12 +165,12 @@ export const AdminTripsPage = () => {
       return;
     }
 
-    const payload = {
+    const basePayload = {
       routeId: Number(form.routeId),
-      busId: Number(form.busId),
       departureTime: form.departureTime,
       arrivalTime: form.arrivalTime,
       basePrice: Number(form.basePrice),
+      status: form.status,
     };
 
     try {
@@ -173,13 +178,13 @@ export const AdminTripsPage = () => {
         await apiClient(`/admin/trips/${form.id}`, {
           method: 'PATCH',
           headers,
-          body: JSON.stringify(payload),
+          body: basePayload,
         });
       } else {
         await apiClient('/admin/trips', {
           method: 'POST',
           headers,
-          body: JSON.stringify(payload),
+          body: { ...basePayload, busId: Number(form.busId) },
         });
       }
       resetForm();
@@ -197,47 +202,26 @@ export const AdminTripsPage = () => {
       departureTime: trip.departureTime.slice(0, 16),
       arrivalTime: trip.arrivalTime.slice(0, 16),
       basePrice: trip.basePrice,
+      status: trip.status,
     });
   };
 
+  const cancelTrip = async (id: number) => {
+    if (!window.confirm('Hủy chuyến này? Hành động này sẽ cập nhật trạng thái sang CANCELLED.')) return;
+    try {
+      await apiClient(`/admin/trips/${id}/cancel`, { method: 'PATCH', headers });
+      void loadTrips();
+    } catch (err) {
+      alert('Không thể hủy chuyến: ' + (err as Error).message);
+    }
+  };
+
   const deleteTrip = async (id: number) => {
-    if (!window.confirm('Xóa chuyến này?')) return;
+    if (!window.confirm('Xóa chuyến này? Hành động này sẽ xóa hoàn toàn!')) return;
     await apiClient(`/admin/trips/${id}`, { method: 'DELETE', headers });
     void loadTrips();
   };
 
-  const resetBusForm = () => {
-    setBusForm({ name: '', plateNumber: '', busType: 'STANDARD', seatMapId: '' });
-    setBusMessage('');
-  };
-
-  const submitBus = async () => {
-    setBusMessage('');
-
-    if (!busForm.name || !busForm.plateNumber) {
-      setBusMessage('Vui lòng nhập tên xe và biển số.');
-      return;
-    }
-
-    const payload = {
-      name: busForm.name,
-      plateNumber: busForm.plateNumber,
-      busType: busForm.busType,
-      seatMapId: busForm.seatMapId ? Number(busForm.seatMapId) : undefined,
-    };
-
-    try {
-      const bus = await apiClient<Bus>('/admin/buses', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      });
-      setBuses((prev) => [...prev, bus]);
-      resetBusForm();
-    } catch (err) {
-      setBusMessage((err as Error).message || 'Không thể tạo xe');
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -247,73 +231,6 @@ export const AdminTripsPage = () => {
           <p className="text-sm text-gray-400">Tạo, chỉnh sửa chuyến và gán xe.</p>
         </div>
       </div>
-
-      <Card title="Thêm xe (gán sơ đồ ghế)">
-        <div className="grid md:grid-cols-4 gap-3">
-          <FormField
-            label="Tên xe"
-            value={busForm.name}
-            onChange={(e) => setBusForm({ ...busForm, name: e.target.value })}
-          />
-          <FormField
-            label="Biển số"
-            value={busForm.plateNumber}
-            onChange={(e) => setBusForm({ ...busForm, plateNumber: e.target.value })}
-          />
-
-          <label className="block text-sm text-gray-200">
-            <div className="mb-2 font-medium">Loại xe</div>
-            <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
-              value={busForm.busType}
-              onChange={(e) => setBusForm({ ...busForm, busType: e.target.value })}
-            >
-              <option value="STANDARD" style={optionTextStyle}>
-                STANDARD
-              </option>
-              <option value="SLEEPER" style={optionTextStyle}>
-                SLEEPER
-              </option>
-              <option value="LIMOUSINE" style={optionTextStyle}>
-                LIMOUSINE
-              </option>
-              <option value="MINIBUS" style={optionTextStyle}>
-                MINIBUS
-              </option>
-            </select>
-          </label>
-
-          <label className="block text-sm text-gray-200">
-            <div className="mb-2 font-medium">Sơ đồ ghế</div>
-            <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
-              value={busForm.seatMapId === '' ? '' : String(busForm.seatMapId ?? '')}
-              onChange={(e) => {
-                const value = parseSelectNumber(e.target.value);
-                setBusForm({ ...busForm, seatMapId: value });
-              }}
-            >
-              <option value="" style={placeholderOptionStyle}>
-                Chưa gán
-              </option>
-              {seatMaps.map((m) => (
-                <option key={m.id} value={String(m.id)} style={optionTextStyle}>
-                  {m.name} ({m.rows}x{m.cols})
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {busMessage ? <div className="text-sm text-error mt-2">{busMessage}</div> : null}
-
-        <div className="mt-3 flex gap-2">
-          <Button onClick={submitBus}>Tạo xe</Button>
-          <Button variant="secondary" onClick={resetBusForm}>
-            Xóa
-          </Button>
-        </div>
-      </Card>
 
       <Card title={form.id ? 'Cập nhật chuyến' : 'Tạo chuyến'}>
         <div className="grid md:grid-cols-3 gap-4">
@@ -341,6 +258,7 @@ export const AdminTripsPage = () => {
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={form.busId === '' ? '' : String(form.busId)}
               onChange={(e) => setForm({ ...form, busId: parseSelectNumber(e.target.value) })}
+              disabled={Boolean(form.id)}
             >
               <option value="" style={placeholderOptionStyle}>
                 Chọn xe
@@ -363,6 +281,28 @@ export const AdminTripsPage = () => {
               setForm({ ...form, basePrice: v === '' ? '' : Number(v) });
             }}
           />
+
+	          <label className="block text-sm text-gray-200">
+	            <div className="mb-2 font-medium">Trạng thái</div>
+	            <select
+	              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+	              value={form.status}
+	              onChange={(e) => setForm({ ...form, status: e.target.value as Trip['status'] })}
+	            >
+	              <option value="SCHEDULED" style={optionTextStyle}>
+	                {tripStatusLabel.SCHEDULED}
+	              </option>
+	              <option value="IN_PROGRESS" style={optionTextStyle}>
+	                {tripStatusLabel.IN_PROGRESS}
+	              </option>
+	              <option value="COMPLETED" style={optionTextStyle}>
+	                {tripStatusLabel.COMPLETED}
+	              </option>
+	              <option value="CANCELLED" style={optionTextStyle}>
+	                {tripStatusLabel.CANCELLED}
+	              </option>
+	            </select>
+	          </label>
 
           <FormField
             label="Giờ đi"
@@ -396,7 +336,7 @@ export const AdminTripsPage = () => {
       </Card>
 
       <Card title="Bộ lọc">
-        <div className="grid md:grid-cols-5 gap-3 text-sm">
+        <div className="grid md:grid-cols-4 gap-3 text-sm">
           <label className="block text-sm text-gray-200">
             <div className="mb-2 font-medium">Tuyến</div>
             <select
@@ -489,21 +429,63 @@ export const AdminTripsPage = () => {
               ))}
             </select>
           </label>
+
+          <label className="block text-sm text-gray-200">
+            <div className="mb-2 font-medium">Trạng thái</div>
+            <select
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={filters.status ?? ''}
+              onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value || undefined }))}
+            >
+              <option value="" style={placeholderOptionStyle}>
+                Tất cả
+              </option>
+              <option value="SCHEDULED" style={optionTextStyle}>
+                Đã lên lịch
+              </option>
+              <option value="IN_PROGRESS" style={optionTextStyle}>
+                Đang chạy
+              </option>
+              <option value="COMPLETED" style={optionTextStyle}>
+                Hoàn thành
+              </option>
+              <option value="CANCELLED" style={optionTextStyle}>
+                Đã hủy
+              </option>
+            </select>
+          </label>
+
+          <label className="block text-sm text-gray-200">
+            <div className="mb-2 font-medium">Sắp xếp</div>
+            <select
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={filters.sortBy ?? ''}
+              onChange={(e) => setFilters((f) => ({ ...f, sortBy: e.target.value || undefined }))}
+            >
+              <option value="" style={placeholderOptionStyle}>
+                Theo thời gian
+              </option>
+              <option value="bookings" style={optionTextStyle}>
+                Theo số bookings
+              </option>
+            </select>
+          </label>
         </div>
       </Card>
 
       <Card title={loading ? 'Đang tải...' : 'Danh sách chuyến'}>
-        <div className="grid grid-cols-6 gap-3 text-xs uppercase text-gray-400 border-b border-white/5 pb-2">
+        <div className="grid grid-cols-7 gap-3 text-xs uppercase text-gray-400 border-b border-white/5 pb-2">
           <div>Tuyến</div>
           <div>Xe</div>
           <div>Giờ đi</div>
           <div>Giờ đến</div>
           <div>Giá</div>
+          <div>Trạng thái</div>
           <div className="text-right">Thao tác</div>
         </div>
         <div className="divide-y divide-white/5 text-sm text-gray-200">
           {trips.map((t) => (
-            <div key={t.id} className="grid grid-cols-6 gap-3 py-2 items-center">
+            <div key={t.id} className="grid grid-cols-7 gap-3 py-2 items-center">
               <div>
                 <div className="text-white font-semibold">{t.route?.name || '-'}</div>
                 <div className="text-xs text-gray-400">
@@ -519,10 +501,22 @@ export const AdminTripsPage = () => {
               <div className="text-xs text-gray-200">{new Date(t.departureTime).toLocaleString()}</div>
               <div className="text-xs text-gray-200">{new Date(t.arrivalTime).toLocaleString()}</div>
               <div className="text-white font-semibold">{t.basePrice.toLocaleString('vi-VN')}đ</div>
+	              <div>
+	                <span
+	                  className={`inline-flex px-2 py-1 rounded-full text-xs ${tripStatusBadgeClass[t.status]}`}
+	                >
+	                  {tripStatusLabel[t.status]}
+	                </span>
+	              </div>
               <div className="text-right space-x-2">
                 <Button variant="secondary" onClick={() => startEdit(t)}>
                   Sửa
                 </Button>
+                {t.status !== 'CANCELLED' && (
+                  <Button variant="ghost" onClick={() => cancelTrip(t.id)}>
+                    Hủy chuyến
+                  </Button>
+                )}
                 <Button variant="ghost" onClick={() => deleteTrip(t.id)}>
                   Xóa
                 </Button>

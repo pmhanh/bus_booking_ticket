@@ -18,6 +18,13 @@ const formatDuration = (minutes?: number) => {
   return `${hrs}h ${mins}m`;
 };
 
+const tripStatusLabel: Record<Trip["status"], string> = {
+  SCHEDULED: "Đã lên lịch",
+  IN_PROGRESS: "Đang chạy",
+  COMPLETED: "Hoàn thành",
+  CANCELLED: "Đã huỷ",
+};
+
 export const TripDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -136,7 +143,7 @@ export const TripDetailsPage = () => {
                   </div>
                   <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                     <div className="text-xs text-gray-400 uppercase">Trạng thái</div>
-                    <div className="text-xl font-semibold text-white">{trip.status}</div>
+                    <div className="text-xl font-semibold text-white">{tripStatusLabel[trip.status]}</div>
                     <div className="text-gray-400 text-xs">Cập nhật theo lịch</div>
                   </div>
                 </div>

@@ -34,6 +34,8 @@ export class TripsController {
     @Query('busId') busId?: string,
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
+    @Query('status') status?: string,
+    @Query('sortBy') sortBy?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
@@ -42,6 +44,8 @@ export class TripsController {
       busId: busId ? Number(busId) : undefined,
       fromDate,
       toDate,
+      status,
+      sortBy,
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });
@@ -55,6 +59,11 @@ export class TripsController {
   @Patch(':id')
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateTripDto) {
     return this.tripsService.update(id, dto);
+  }
+
+  @Patch(':id/cancel')
+  cancel(@Param('id', ParseIntPipe) id: number) {
+    return this.tripsService.cancel(id);
   }
 
   @Delete(':id')

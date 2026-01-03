@@ -38,7 +38,8 @@ export const TopRoutesChart = ({ data }: Props) => {
               borderRadius: '8px',
               color: '#fff',
             }}
-            formatter={(value: number, name: string) => {
+            formatter={(value: number | undefined, name: string) => {
+              if (value === undefined) return ['0', name];
               if (name === 'revenue') {
                 return [`${value.toLocaleString('vi-VN')}đ`, 'Doanh thu'];
               }

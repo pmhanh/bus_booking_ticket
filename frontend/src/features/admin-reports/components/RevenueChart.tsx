@@ -32,7 +32,9 @@ export const RevenueChart = ({ data }: Props) => {
               borderRadius: '8px',
               color: '#fff',
             }}
-            formatter={(value: number) => [`${value.toLocaleString('vi-VN')}đ`, 'Doanh thu']}
+            formatter={(value: number | undefined) =>
+              value !== undefined ? [`${value.toLocaleString('vi-VN')}đ`, 'Doanh thu'] : ['0đ', 'Doanh thu']
+            }
           />
           <Line
             type="monotone"

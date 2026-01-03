@@ -13,6 +13,7 @@ import {
   Repository,
 } from 'typeorm';
 import * as nodemailer from 'nodemailer';
+import * as QRCode from 'qrcode';
 import { Booking } from './booking.entity';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { Trip } from '../trips/trip.entity';
@@ -205,16 +206,22 @@ export class BookingsService {
   }
 
   async sendTicket(code: string, opts: BookingAccessOptions = {}) {
-    const { booking, content } = await this.ticketContent(code, opts);
+    const { booking, content, qrCodeDataUrl } = await this.ticketContent(code, opts);
     if (booking.status !== 'CONFIRMED')
       throw new BadRequestException('Ticket only available for confirmed bookings');
     if (!this.mailer)
       throw new BadRequestException('Email service not configured');
+
+    const attachment = qrCodeDataUrl ? this.qrAttachment(qrCodeDataUrl, booking) : undefined;
+    const qrCid = attachment?.cid;
+
     await this.mailer.sendMail({
       from: this.mailFrom,
       to: booking.contactEmail,
       subject: `E-ticket for booking ${booking.reference}`,
       text: content,
+      html: this.formatTicketHtml(booking, qrCid, qrCodeDataUrl),
+      attachments: attachment ? [attachment] : undefined,
     });
     return { ok: true };
   }
@@ -496,6 +503,7 @@ export class BookingsService {
       throw new BadRequestException('Ticket only available for confirmed bookings');
 
     const seatList = (booking.details ?? []).map((d) => d.seatCodeSnapshot).join(', ');
+    const qrCodeDataUrl = await this.generateQrCode(booking.reference || booking.id);
 
     const lines = [
       `Booking Reference: ${booking.reference}`,
@@ -505,7 +513,7 @@ export class BookingsService {
       `Status: ${booking.status}`,
       `Contact: ${booking.contactName} (${booking.contactEmail})`,
     ];
-    return { booking, content: lines.join('\n') };
+    return { booking, content: lines.join('\n'), qrCodeDataUrl };
   }
 
   private formatTicketContent(booking: Booking) {
@@ -525,15 +533,57 @@ export class BookingsService {
     return lines.join('\n');
   }
 
+  private formatTicketHtml(booking: Booking, qrCid?: string, qrDataUrl?: string) {
+    const seats = (booking.details ?? []).map((d) => d.seatCodeSnapshot).join(', ');
+    const depart = booking.trip.departureTime.toISOString();
+    const arrive = booking.trip.arrivalTime.toISOString();
+    const qrImgSrc = qrCid ? `cid:${qrCid}` : qrDataUrl;
+
+    return `
+      <div style="font-family: Arial, sans-serif; color: #0f172a;">
+        <h2>E-ticket for booking ${booking.reference || booking.id}</h2>
+        <p>Status: ${booking.status}</p>
+        <p>Route: ${booking.trip.route.originCity.name} -> ${booking.trip.route.destinationCity.name}</p>
+        <p>Departure: ${depart}</p>
+        <p>Arrival: ${arrive}</p>
+        <p>Seats: ${seats}</p>
+        <p>Contact: ${booking.contactName} (${booking.contactEmail || booking.contactPhone || ''})</p>
+        ${qrImgSrc ? `<div style="margin-top:12px;"><div>QR code:</div><img src="${qrImgSrc}" alt="Booking QR" style="max-width:200px;" /></div>` : ''}
+      </div>
+    `;
+  }
+
+  private qrAttachment(dataUrl: string, booking: Booking) {
+    const match = dataUrl.match(/^data:(.+);base64,(.+)$/);
+    if (!match) return undefined;
+    const [, mime, b64] = match;
+    return {
+      filename: `ticket-${booking.reference || booking.id}.png`,
+      content: Buffer.from(b64, 'base64'),
+      contentType: mime,
+      cid: `booking-qr-${booking.id}`,
+    };
+  }
+
+  private async generateQrCode(value: string) {
+    return QRCode.toDataURL(value, { errorCorrectionLevel: 'M', margin: 1, scale: 6 });
+  }
+
   private async trySendTicket(booking: Booking) {
     if (!this.mailer) return;
     if (!booking.contactEmail) return;
     const text = this.formatTicketContent(booking);
+    const qrCodeDataUrl = await this.generateQrCode(booking.reference || booking.id);
+    const attachment = qrCodeDataUrl ? this.qrAttachment(qrCodeDataUrl, booking) : undefined;
+    const qrCid = attachment?.cid;
+
     await this.mailer.sendMail({
       from: this.mailFrom,
       to: booking.contactEmail,
       subject: `E-ticket for booking ${booking.reference}`,
       text,
+      html: this.formatTicketHtml(booking, qrCid, qrCodeDataUrl),
+      attachments: attachment ? [attachment] : undefined,
     });
   }
 

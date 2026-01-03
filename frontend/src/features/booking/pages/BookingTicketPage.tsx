@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { QRCodeSVG } from "qrcode.react";
 import { Card } from "../../../shared/components/ui/Card";
 import { Button } from "../../../shared/components/ui/Button";
 import { useBooking } from "../context/BookingContext";
@@ -77,7 +78,7 @@ export const BookingTicketPage = () => {
       <div className="flex items-center justify-between gap-3 print:hidden">
         <div className="flex items-center gap-3">
           <Button variant="ghost" onClick={() => navigate(-1)}>
-            {"<- Quay lai"}
+            {"<- Quay lại"}
           </Button>
           <div className="space-y-1">
             <p className="text-xs uppercase text-gray-400">E-ticket</p>
@@ -161,11 +162,12 @@ export const BookingTicketPage = () => {
           </div>
 
           <div className="p-6 space-y-4 bg-gradient-to-br from-emerald-900/60 to-slate-900/80">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-              <div className="h-32 w-full rounded-xl bg-gradient-to-br from-white/10 to-white/5 grid place-items-center text-gray-200 text-sm border border-white/10">
-                QR / Barcode
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center space-y-2">
+              <div className="w-full grid place-items-center">
+                <QRCodeSVG value={booking.reference || booking.id} size={180} />
               </div>
-              <div className="text-xs text-gray-400 mt-2">Quét tại quầy hoặc lên xe</div>
+              <div className="text-sm text-white font-semibold break-all">{booking.reference || booking.id}</div>
+              <div className="text-xs text-gray-400">Quét tại quầy hoặc lên xe</div>
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-gray-200 space-y-2">

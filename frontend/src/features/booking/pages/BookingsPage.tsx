@@ -154,7 +154,6 @@ export const BookingsPage = () => {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase text-gray-400">Bookings</p>
           <h1 className="text-3xl font-bold text-white">Quản lý đặt chỗ</h1>
         </div>
         <Link to="/search">
@@ -316,10 +315,10 @@ const BookingRow = ({
       </div>
       <div className="flex items-center gap-2">
         <Link to={`/bookings/${booking.id}/ticket`} state={{ booking: bookingWithPassengers }}>
-          <Button variant="secondary">Xem ve</Button>
+          <Button variant="secondary">Xem vé</Button>
         </Link>
         <Button variant="ghost" onClick={() => onCancel(booking.id)} disabled={booking.status === 'CANCELLED'}>
-          {booking.status === 'CANCELLED' ? 'Da huy' : 'Huy ve'}
+          {booking.status === 'CANCELLED' ? 'đã hủy' : 'Hủy vé'}
         </Button>
         
       </div>

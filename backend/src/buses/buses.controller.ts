@@ -7,8 +7,13 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import { BusesService } from './buses.service';
 import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
@@ -54,5 +59,54 @@ export class BusesController {
   @Delete(':id')
   delete(@Param('id', ParseIntPipe) id: number) {
     return this.busesService.delete(id);
+  }
+
+  @Post(':id/photos')
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      storage: diskStorage({
+        destination: './uploads/buses',
+        filename: (req, file, cb) => {
+          const randomName = Array(32)
+            .fill(null)
+            .map(() => Math.round(Math.random() * 16).toString(16))
+            .join('');
+          cb(null, `${randomName}${extname(file.originalname)}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+          return cb(new Error('Only image files are allowed!'), false);
+        }
+        cb(null, true);
+      },
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+    }),
+  )
+  uploadPhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.busesService.addPhoto(id, file.filename);
+  }
+
+  @Delete(':id/photos/:photoId')
+  deletePhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('photoId') photoId: string,
+  ) {
+    return this.busesService.deletePhoto(id, photoId);
+  }
+
+  @Patch(':id/deactivate')
+  deactivate(@Param('id', ParseIntPipe) id: number) {
+    return this.busesService.deactivate(id);
+  }
+
+  @Patch(':id/activate')
+  activate(@Param('id', ParseIntPipe) id: number) {
+    return this.busesService.activate(id);
   }
 }

@@ -6,5 +6,6 @@ export type Bus = {
   plateNumber: string;
   busType?: string;
   amenities?: string[];
+  photos?: string[];
   seatMap?: SeatMap | null;
 };

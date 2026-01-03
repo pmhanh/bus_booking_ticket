@@ -53,4 +53,14 @@ export class CreateBookingDto {
 
   @IsDateString()
   holdExpiresAt: string;
+
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  pickupStopId?: number;
+
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  dropoffStopId?: number;
 }

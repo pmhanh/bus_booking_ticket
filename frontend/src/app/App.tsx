@@ -17,6 +17,7 @@ import { AdminSeatMapsPage } from '../features/seatmap/pages/AdminSeatMapsPage';
 import { AdminBusesPage } from '../features/bus/pages/AdminBusesPage';
 import { AdminBookingsPage } from '../features/admin-bookings/pages/AdminBookingsPage';
 import { AdminReportsPage } from '../features/admin-reports/pages/AdminReportsPage';
+import { TripOperationsPage } from '../features/trip-operations/pages/TripOperationsPage';
 import { HomePage } from '../features/booking/pages/HomePage';
 import { SearchResultsPage } from '../features/booking/pages/SearchResultsPage';
 import { TripDetailsPage } from '../features/trip/pages/TripDetailsPage';
@@ -69,6 +70,7 @@ function App() {
           <Route path="/admin/routes" element={<AdminRoutesPage />} />
           <Route path="/admin/seat-maps" element={<AdminSeatMapsPage />} />
           <Route path="/admin/reports" element={<AdminReportsPage />} />
+          <Route path="/admin/trip-operations" element={<TripOperationsPage />} />
         </Route>
 
         <Route path="/payments/stripe/success" element={<StripeSuccessPage />} />

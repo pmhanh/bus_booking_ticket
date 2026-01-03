@@ -46,7 +46,10 @@ export class RoutesService {
     return this.routesRepo.save(route);
   }
 
-  findAll(filter?: { originCityId?: number; destinationCityId?: number }) {
+  async findAll(
+    filter?: { originCityId?: number; destinationCityId?: number },
+    pagination?: { limit?: number; offset?: number },
+  ) {
     const qb = this.routesRepo
       .createQueryBuilder('route')
       .leftJoinAndSelect('route.originCity', 'origin')
@@ -55,7 +58,20 @@ export class RoutesService {
       qb.andWhere('origin.id = :oid', { oid: filter.originCityId });
     if (filter?.destinationCityId)
       qb.andWhere('destination.id = :did', { did: filter.destinationCityId });
-    return qb.orderBy('route.id', 'DESC').getMany();
+
+    qb.orderBy('route.id', 'DESC');
+
+    if (pagination?.limit) qb.take(pagination.limit);
+    if (pagination?.offset) qb.skip(pagination.offset);
+
+    const [routes, total] = await qb.getManyAndCount();
+
+    return {
+      routes,
+      total,
+      limit: pagination?.limit,
+      offset: pagination?.offset,
+    };
   }
 
   async findById(id: number) {
@@ -138,5 +154,21 @@ export class RoutesService {
       where: { route: { id: routeId } },
       order: { order: 'ASC' },
     });
+  }
+
+  async deactivate(id: number) {
+    const route = await this.routesRepo.findOne({ where: { id } });
+    if (!route) throw new NotFoundException('Route not found');
+    route.isActive = false;
+    await this.routesRepo.save(route);
+    return route;
+  }
+
+  async activate(id: number) {
+    const route = await this.routesRepo.findOne({ where: { id } });
+    if (!route) throw new NotFoundException('Route not found');
+    route.isActive = true;
+    await this.routesRepo.save(route);
+    return route;
   }
 }

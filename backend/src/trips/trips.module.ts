@@ -10,6 +10,7 @@ import { SeatMap } from '../seat-maps/seat-map.entity';
 import { TripSeatsService } from './trip-seats.service';
 import { TripSeatsController } from './trip-seats.controller';
 import { Booking } from '../bookings/booking.entity';
+import { BookingDetail } from '../bookings/booking-detail.entity';
 import { RedisModule } from 'src/redis/redis.module';
 import { TripSeat } from './trip-seat.entity';
 import { SeatHoldService } from './seat-hold.service';
@@ -18,7 +19,7 @@ import { RealtimeModule } from 'src/realtime/realtime.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Trip, Route, Bus, SeatMap, TripSeat]),
+    TypeOrmModule.forFeature([Trip, Route, Bus, SeatMap, TripSeat, Booking, BookingDetail]),
     RedisModule,
     RealtimeModule
   ],

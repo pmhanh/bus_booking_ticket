@@ -28,6 +28,9 @@ export class Route {
   @Column({ type: 'int' })
   estimatedDurationMinutes: number;
 
+  @Column({ default: true })
+  isActive: boolean;
+
   @OneToMany(() => RouteStop, (stop) => stop.route, { cascade: true })
   stops: RouteStop[];
 }

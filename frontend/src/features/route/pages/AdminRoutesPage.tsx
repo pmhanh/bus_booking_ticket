@@ -34,6 +34,9 @@ const parseSelectNumber = (value: string): number | '' => {
 export const AdminRoutesPage = () => {
   const { accessToken } = useAuth();
   const [routes, setRoutes] = useState<Route[]>([]);
+  const [total, setTotal] = useState(0);
+  const [limit, setLimit] = useState(20);
+  const [offset, setOffset] = useState(0);
   const [cities, setCities] = useState<City[]>([]);
   const [form, setForm] = useState<RouteForm>({
     name: '',
@@ -57,8 +60,16 @@ export const AdminRoutesPage = () => {
   );
 
   const loadRoutes = useCallback(
-    () => apiClient<Route[]>('/admin/routes', { headers }).then(setRoutes),
-    [headers],
+    () => {
+      const params = new URLSearchParams();
+      params.append('limit', String(limit));
+      params.append('offset', String(offset));
+      return apiClient<{ routes: Route[]; total: number }>(`/admin/routes?${params.toString()}`, { headers }).then((data) => {
+        setRoutes(data.routes);
+        setTotal(data.total);
+      });
+    },
+    [headers, limit, offset],
   );
 
   useEffect(() => {
@@ -318,6 +329,29 @@ export const AdminRoutesPage = () => {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="mt-4 flex items-center justify-between text-sm text-gray-400 border-t border-white/5 pt-4">
+          <div>
+            Hiển thị {offset + 1}-{Math.min(offset + limit, total)} trong tổng số {total} tuyến
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setOffset(Math.max(0, offset - limit))}
+              disabled={offset === 0}
+            >
+              Trang trước
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setOffset(offset + limit)}
+              disabled={offset + limit >= total}
+            >
+              Trang sau
+            </Button>
+          </div>
         </div>
       </Card>
 

@@ -15,6 +15,8 @@ import { Route } from '../routes/route.entity';
 import { Bus } from '../buses/bus.entity';
 import { SeatMap } from '../seat-maps/seat-map.entity';
 import { TripSeat } from './trip-seat.entity';
+import { Booking } from '../bookings/booking.entity';
+import { BookingDetail } from '../bookings/booking-detail.entity';
 
 @Injectable()
 export class TripsService {
@@ -24,6 +26,8 @@ export class TripsService {
     @InjectRepository(Bus) private readonly busRepo: Repository<Bus>,
     @InjectRepository(SeatMap) private readonly seatMapRepo: Repository<SeatMap>,
     @InjectRepository(TripSeat) private readonly tripSeatRepo: Repository<TripSeat>,
+    @InjectRepository(Booking) private readonly bookingRepo: Repository<Booking>,
+    @InjectRepository(BookingDetail) private readonly bookingDetailRepo: Repository<BookingDetail>,
   ) {}
 
   private parseDates(departureTime: string, arrivalTime: string) {
@@ -192,7 +196,9 @@ async create(dto: CreateTripDto) {
       .leftJoinAndSelect('route.destinationCity', 'destinationCity')
       .leftJoinAndSelect('trip.bus', 'bus')
       .leftJoinAndSelect('bus.seatMap', 'seatMap')
-      .where('trip.status = :status', { status: 'SCHEDULED' });
+      .where('trip.status = :status', { status: 'SCHEDULED' })
+      .andWhere('route.isActive = :routeActive', { routeActive: true })
+      .andWhere('bus.isActive = :busActive', { busActive: true });
 
     const dateRange = this.getDateRange(params.date);
     if (params.originId) qb.andWhere('originCity.id = :originId', { originId: params.originId });
@@ -319,5 +325,90 @@ async create(dto: CreateTripDto) {
     const res = await this.tripRepo.delete(id);
     if (!res.affected) throw new NotFoundException('Trip not found');
     return { ok: true };
+  }
+
+  async getPassengers(tripId: number) {
+    const trip = await this.tripRepo.findOne({
+      where: { id: tripId },
+      relations: ['route', 'route.originCity', 'route.destinationCity'],
+    });
+    if (!trip) throw new NotFoundException('Trip not found');
+
+    const bookingDetails = await this.bookingDetailRepo
+      .createQueryBuilder('bd')
+      .leftJoinAndSelect('bd.booking', 'booking')
+      .leftJoinAndSelect('bd.tripSeat', 'tripSeat')
+      .where('booking.trip_id = :tripId', { tripId })
+      .andWhere('booking.status IN (:...statuses)', { statuses: ['CONFIRMED', 'PENDING'] })
+      .orderBy('bd.seatCodeSnapshot', 'ASC')
+      .getMany();
+
+    return {
+      trip: {
+        id: trip.id,
+        route: trip.route,
+        departureTime: trip.departureTime,
+        arrivalTime: trip.arrivalTime,
+        status: trip.status,
+      },
+      passengers: bookingDetails.map((bd) => ({
+        bookingDetailId: bd.id,
+        bookingReference: bd.booking.reference,
+        bookingStatus: bd.booking.status,
+        seatCode: bd.seatCodeSnapshot,
+        passengerName: bd.passengerName,
+        passengerPhone: bd.passengerPhone,
+        passengerIdNumber: bd.passengerIdNumber,
+        checkedInAt: bd.checkedInAt,
+        isCheckedIn: !!bd.checkedInAt,
+      })),
+    };
+  }
+
+  async checkInPassenger(tripId: number, bookingDetailId: number) {
+    const bookingDetail = await this.bookingDetailRepo.findOne({
+      where: { id: bookingDetailId },
+      relations: ['booking', 'booking.trip'],
+    });
+
+    if (!bookingDetail) {
+      throw new NotFoundException('Booking detail not found');
+    }
+
+    if (bookingDetail.booking.trip.id !== tripId) {
+      throw new BadRequestException('Booking detail does not belong to this trip');
+    }
+
+    if (bookingDetail.checkedInAt) {
+      throw new BadRequestException('Passenger already checked in');
+    }
+
+    bookingDetail.checkedInAt = new Date();
+    await this.bookingDetailRepo.save(bookingDetail);
+
+    return {
+      ok: true,
+      bookingDetailId: bookingDetail.id,
+      checkedInAt: bookingDetail.checkedInAt,
+    };
+  }
+
+  async updateOperationalStatus(tripId: number, status: 'DEPARTED' | 'ARRIVED') {
+    const trip = await this.tripRepo.findOne({ where: { id: tripId } });
+    if (!trip) throw new NotFoundException('Trip not found');
+
+    if (status === 'DEPARTED') {
+      trip.status = 'IN_PROGRESS';
+    } else if (status === 'ARRIVED') {
+      trip.status = 'COMPLETED';
+    }
+
+    await this.tripRepo.save(trip);
+
+    return {
+      ok: true,
+      tripId: trip.id,
+      status: trip.status,
+    };
   }
 }

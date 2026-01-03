@@ -4,6 +4,7 @@ import { Button } from '../../../shared/components/ui/Button';
 import { FormField } from '../../../shared/components/ui/FormField';
 import { apiClient } from '../../../shared/api/api';
 import { useAuth } from '../../auth/context/AuthContext';
+import { BusPhotoUpload } from '../components/BusPhotoUpload';
 import type { Bus } from '../types/bus';
 import type { SeatMap } from '../../seatmap/types/seatMap';
 
@@ -301,33 +302,46 @@ export const AdminBusesPage = () => {
             <div className="py-8 text-center text-gray-400">Chưa có xe nào</div>
           ) : (
             filteredBuses.map((bus) => (
-              <div key={bus.id} className="grid grid-cols-6 gap-3 py-3 items-center">
-                <div className="text-white font-semibold">{bus.name}</div>
-                <div className="text-gray-200">{bus.plateNumber}</div>
-                <div>
-                  <span className="inline-flex px-2 py-1 rounded-full text-xs bg-primary/20 text-primary">
-                    {bus.busType || 'N/A'}
-                  </span>
-                </div>
-                <div className="text-gray-200">
-                  {bus.seatMap ? (
-                    <span>
-                      {bus.seatMap.name} ({bus.seatMap.rows}x{bus.seatMap.cols})
+              <div key={bus.id} className="py-3">
+                <div className="grid grid-cols-6 gap-3 items-center">
+                  <div className="text-white font-semibold">{bus.name}</div>
+                  <div className="text-gray-200">{bus.plateNumber}</div>
+                  <div>
+                    <span className="inline-flex px-2 py-1 rounded-full text-xs bg-primary/20 text-primary">
+                      {bus.busType || 'N/A'}
                     </span>
-                  ) : (
-                    <span className="text-gray-500 italic">Chưa gán</span>
+                  </div>
+                  <div className="text-gray-200">
+                    {bus.seatMap ? (
+                      <span>
+                        {bus.seatMap.name} ({bus.seatMap.rows}x{bus.seatMap.cols})
+                      </span>
+                    ) : (
+                      <span className="text-gray-500 italic">Chưa gán</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {bus.amenities && bus.amenities.length > 0 ? bus.amenities.join(', ') : 'Không có'}
+                  </div>
+                  <div className="text-right space-x-2">
+                    <Button variant="secondary" onClick={() => startEdit(bus)}>
+                      Sửa
+                    </Button>
+                    <Button variant="ghost" onClick={() => deleteBus(bus.id)}>
+                      Xóa
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-3 pl-4 border-l-2 border-white/10">
+                  <div className="text-xs uppercase text-gray-400 mb-2">Ảnh xe</div>
+                  {accessToken && (
+                    <BusPhotoUpload
+                      busId={bus.id}
+                      photos={bus.photos || []}
+                      accessToken={accessToken}
+                      onPhotoChange={loadBuses}
+                    />
                   )}
-                </div>
-                <div className="text-xs text-gray-400">
-                  {bus.amenities && bus.amenities.length > 0 ? bus.amenities.join(', ') : 'Không có'}
-                </div>
-                <div className="text-right space-x-2">
-                  <Button variant="secondary" onClick={() => startEdit(bus)}>
-                    Sửa
-                  </Button>
-                  <Button variant="ghost" onClick={() => deleteBus(bus.id)}>
-                    Xóa
-                  </Button>
                 </div>
               </div>
             ))

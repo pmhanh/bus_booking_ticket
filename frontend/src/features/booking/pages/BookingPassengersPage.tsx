@@ -8,7 +8,7 @@ import { useAuth } from "../../auth/context/AuthContext";
 
 export const BookingPassengersPage = () => {
   const navigate = useNavigate();
-  const { trip, passengers, hold, updatePassenger, contact, setContact, totalPrice } = useBooking();
+  const { trip, passengers, hold, updatePassenger, contact, setContact, pickupStopId, setPickupStopId, dropoffStopId, setDropoffStopId, totalPrice } = useBooking();
   const { user } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [passengerErrors, setPassengerErrors] = useState<
@@ -110,6 +110,9 @@ export const BookingPassengersPage = () => {
 
   if (!trip) return null;
 
+  const pickupStops = trip.route?.stops?.filter((s: any) => s.type === 'PICKUP') || [];
+  const dropoffStops = trip.route?.stops?.filter((s: any) => s.type === 'DROPOFF') || [];
+
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
@@ -184,6 +187,52 @@ export const BookingPassengersPage = () => {
           </div>
         </Card>
       </div>
+
+      {(pickupStops.length > 0 || dropoffStops.length > 0) && (
+        <Card title="Điểm đón/trả">
+          <div className="grid md:grid-cols-2 gap-4 text-sm text-gray-200">
+            {pickupStops.length > 0 && (
+              <div>
+                <label className="block mb-2 font-medium text-gray-300">
+                  Điểm đón (tùy chọn)
+                </label>
+                <select
+                  value={pickupStopId ?? ''}
+                  onChange={(e) => setPickupStopId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+                >
+                  <option value="">Chưa chọn</option>
+                  {pickupStops.map((stop: any) => (
+                    <option key={stop.id} value={stop.id} style={{ color: '#111' }}>
+                      {stop.city.name} (+{stop.estimatedOffsetMinutes} phút)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {dropoffStops.length > 0 && (
+              <div>
+                <label className="block mb-2 font-medium text-gray-300">
+                  Điểm trả (tùy chọn)
+                </label>
+                <select
+                  value={dropoffStopId ?? ''}
+                  onChange={(e) => setDropoffStopId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+                >
+                  <option value="">Chưa chọn</option>
+                  {dropoffStops.map((stop: any) => (
+                    <option key={stop.id} value={stop.id} style={{ color: '#111' }}>
+                      {stop.city.name} (+{stop.estimatedOffsetMinutes} phút)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card title="Hành khách">
         <div className="space-y-3 text-sm text-gray-200">

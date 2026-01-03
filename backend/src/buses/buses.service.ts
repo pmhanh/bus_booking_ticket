@@ -72,4 +72,45 @@ export class BusesService {
     if (!result.affected) throw new NotFoundException('Bus not found');
     return { ok: true };
   }
+
+  async addPhoto(id: number, filename: string) {
+    const bus = await this.busRepo.findOne({ where: { id } });
+    if (!bus) throw new NotFoundException('Bus not found');
+    bus.photos = [...(bus.photos || []), filename];
+    await this.busRepo.save(bus);
+    return bus;
+  }
+
+  async deletePhoto(id: number, photoId: string) {
+    const bus = await this.busRepo.findOne({ where: { id } });
+    if (!bus) throw new NotFoundException('Bus not found');
+    bus.photos = (bus.photos || []).filter((p) => p !== photoId);
+    await this.busRepo.save(bus);
+
+    // Delete physical file
+    const fs = require('fs');
+    const path = require('path');
+    const filePath = path.join('./uploads/buses', photoId);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    return bus;
+  }
+
+  async deactivate(id: number) {
+    const bus = await this.busRepo.findOne({ where: { id } });
+    if (!bus) throw new NotFoundException('Bus not found');
+    bus.isActive = false;
+    await this.busRepo.save(bus);
+    return bus;
+  }
+
+  async activate(id: number) {
+    const bus = await this.busRepo.findOne({ where: { id } });
+    if (!bus) throw new NotFoundException('Bus not found');
+    bus.isActive = true;
+    await this.busRepo.save(bus);
+    return bus;
+  }
 }

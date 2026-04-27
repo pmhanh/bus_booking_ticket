@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -12,8 +13,14 @@ import {
 import { Trip } from '../trips/trip.entity';
 import { BookingDetail } from './booking-detail.entity';
 import { RouteStop } from '../routes/route-stop.entity';
+import { User } from 'src/users/user.entity';
 
-export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'EXPIRED';
+export enum BookingStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  CANCELLED = 'CANCELLED',
+  EXPIRED = 'EXPIRED'
+}
 
 @Entity({ name: 'bookings' })
 @Unique(['reference'])
@@ -24,12 +31,13 @@ export class Booking {
   @Column({ type: 'varchar', nullable: true })
   reference?: string | null;
 
-  @ManyToOne(() => Trip, { eager: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => Trip, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'trip_id' })
   trip: Trip;
 
-  @Column({ nullable: true })
-  userId?: string;
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL'})
+  @JoinColumn({ name: 'user_id'})
+  user?: User | null;
 
   @Column()
   contactName: string;
@@ -43,7 +51,7 @@ export class Booking {
   @Column({ type: 'int' })
   totalPrice: number;
 
-  @Column({ type: 'varchar', default: 'PENDING' })
+  @Column({ type: 'enum', enum: BookingStatus, default: BookingStatus.PENDING })
   status: BookingStatus;
 
   @Column({ type: 'timestamptz', nullable: true })
@@ -52,11 +60,11 @@ export class Booking {
   @Column({ type: 'varchar', length: 64, nullable: true })
   lockToken?: string | null;
 
-  @ManyToOne(() => RouteStop, { nullable: true, eager: true })
+  @ManyToOne(() => RouteStop, { nullable: true})
   @JoinColumn({ name: 'pickup_stop_id' })
   pickupStop?: RouteStop | null;
 
-  @ManyToOne(() => RouteStop, { nullable: true, eager: true })
+  @ManyToOne(() => RouteStop, { nullable: true})
   @JoinColumn({ name: 'dropoff_stop_id' })
   dropoffStop?: RouteStop | null;
 

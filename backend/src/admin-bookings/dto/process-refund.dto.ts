@@ -1,4 +1,5 @@
 import { IsEnum, IsInt, IsString, Min } from 'class-validator';
+import { RefundMethod } from '../../payments/entities/payment.entity';
 
 export class ProcessRefundDto {
   @IsInt()
@@ -8,6 +9,6 @@ export class ProcessRefundDto {
   @IsString()
   reason: string;
 
-  @IsEnum(['MANUAL', 'GATEWAY'])
-  method: 'MANUAL' | 'GATEWAY';
+  @IsEnum(RefundMethod)
+  method: RefundMethod;
 }

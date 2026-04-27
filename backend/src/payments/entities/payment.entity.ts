@@ -1,55 +1,57 @@
+import { Booking } from 'src/bookings/booking.entity';
 import {
   Column,
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
-export type PaymentProvider = 'MOMO' | 'STRIPE';
-export type PaymentStatus = 'INIT' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED';
+export enum PaymentProvider {
+  STRIPE = 'STRIPE',
+}
+
+export enum PaymentStatus {
+  INIT = 'INIT',
+  PENDING = 'PENDING',
+  SUCCESS = 'SUCCESS',
+  FAILED = 'FAILED',
+  REFUNDED = 'REFUNDED',
+}
+
+export enum RefundMethod {
+  MANUAL = 'MANUAL',
+  GATEWAY = 'GATEWAY',
+}
 
 @Entity({ name: 'payments' })
-@Index('idx_payments_booking', ['bookingId'])
+@Index('idx_payments_booking', ['booking'])
 @Index('idx_payments_order', ['orderId'], { unique: true })
 export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar' })
-  bookingId: string;
+  @ManyToOne(() => Booking, { onDelete: 'CASCADE', nullable: false })
+  @JoinColumn({ name: 'booking_id' })
+  booking: Booking;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'enum', enum: PaymentProvider })
   provider: PaymentProvider;
 
-  @Column({ type: 'varchar', default: 'INIT' })
+  @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.INIT })
   status: PaymentStatus;
 
   @Column({ type: 'int' })
   amount: number;
 
-  // MoMo fields
   @Column({ type: 'varchar' })
   orderId: string;
 
-  @Column({ type: 'varchar' })
-  requestId: string;
-
   @Column({ type: 'varchar', nullable: true })
-  payUrl?: string;
-
-  @Column({ type: 'varchar', nullable: true })
-  deeplink?: string;
-
-  @Column({ type: 'varchar', nullable: true })
-  qrCodeUrl?: string;
-
-  @Column({ type: 'bigint', nullable: true })
-  transId?: string;
-
-  @Column({ type: 'int', nullable: true })
-  resultCode?: number;
+  stripePaymentIntentId?: string;
 
   @Column({ type: 'varchar', nullable: true })
   message?: string;
@@ -57,15 +59,14 @@ export class Payment {
   @Column({ type: 'jsonb', nullable: true })
   raw?: any;
 
-  // Refund fields
   @Column({ type: 'int', nullable: true })
   refundAmount?: number;
 
   @Column({ type: 'text', nullable: true })
   refundReason?: string;
 
-  @Column({ type: 'varchar', nullable: true })
-  refundMethod?: 'MANUAL' | 'GATEWAY';
+  @Column({ type: 'enum', enum: RefundMethod, nullable: true })
+  refundMethod?: RefundMethod;
 
   @Column({ type: 'timestamptz', nullable: true })
   refundedAt?: Date;

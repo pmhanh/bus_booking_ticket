@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -11,21 +12,17 @@ import { Trip } from '../trips/trip.entity';
 import { User } from '../users/user.entity';
 
 @Entity('reviews')
-@Index(['tripId', 'userId'], { unique: true })
+@Index(['trip', 'user'], { unique: true })
 export class Review {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  tripId: number;
-
-  @Column()
-  userId: string;
-
-  @ManyToOne(() => Trip, (t) => (t as any).reviews, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Trip, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'trip_id' })
   trip: Trip;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
   user: User;
 
   @Column({ type: 'int', default: 5 })

@@ -1,14 +1,27 @@
+import { Booking } from 'src/bookings/booking.entity';
 import {
   Column,
   CreateDateColumn,
   Entity,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
-export type UserRole = 'admin' | 'agent' | 'user';
-export type AuthProvider = 'local' | 'google';
-export type UserStatus = 'pending' | 'active' | 'banned';
+export enum UserRole {
+  ADMIN = 'admin',
+  AGENT = 'agent',
+  USER = 'user'
+}
+export enum AuthProvider {
+  LOCAL = 'local',
+  GOOGLE = 'google'
+}
+export enum UserStatus {
+  PENDING = 'pending',
+  ACTIVE = 'active',
+  BANNED = 'banned'
+}
 
 @Entity({ name: 'users' })
 export class User {
@@ -30,13 +43,13 @@ export class User {
   @Column({ nullable: true })
   avatarUrl?: string;
 
-  @Column({ default: 'user' })
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role: UserRole;
 
-  @Column({ default: 'local' })
+  @Column({ type: 'enum', enum: AuthProvider, default: AuthProvider.LOCAL })
   provider: AuthProvider;
 
-  @Column({ default: 'pending' })
+  @Column({ type: 'enum', enum: UserStatus, default: UserStatus.PENDING })
   status: UserStatus;
 
   @Column({ default: false })
@@ -45,6 +58,9 @@ export class User {
   @Column({ type: 'text', nullable: true })
   refreshTokenHash?: string | null;
 
+  @OneToMany(() => Booking, (booking) => booking.user)
+  bookings: Booking[];
+  
   @CreateDateColumn()
   createdAt: Date;
 

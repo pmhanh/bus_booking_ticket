@@ -9,6 +9,11 @@ import {
 import { Route } from './route.entity';
 import { City } from '../cities/city.entity';
 
+export enum RouteStopType {
+  PICKUP = 'PICKUP',
+  DROPOFF = 'DROPOFF',
+}
+
 @Entity({ name: 'route_stops' })
 @Unique(['route', 'order'])
 export class RouteStop {
@@ -23,8 +28,8 @@ export class RouteStop {
   @JoinColumn({ name: 'city_id' })
   city: City;
 
-  @Column({ type: 'varchar'})
-  type: 'PICKUP' | 'DROPOFF';
+  @Column({ type: 'enum', enum: RouteStopType })
+  type: RouteStopType;
 
   @Column({ type: 'int' })
   order: number;

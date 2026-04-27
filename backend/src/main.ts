@@ -26,7 +26,6 @@ async function bootstrap() {
     credentials: true,
   });
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
-  app.use('/api/payments/webhook', express.raw({ type: '*/*' }));
   app.use('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }));
 
   await app.listen(process.env.PORT ?? 3000);

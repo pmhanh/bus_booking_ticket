@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Booking, BookingStatus } from '../bookings/booking.entity';
-import { Payment } from '../payments/entities/payment.entity';
+import { Payment, PaymentStatus, RefundMethod } from '../payments/entities/payment.entity';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 import { ProcessRefundDto } from './dto/process-refund.dto';
 
@@ -106,7 +106,7 @@ export class AdminBookingsService {
 
     // Get payment info
     const payment = await this.paymentRepo.findOne({
-      where: { bookingId: booking.id },
+      where: { booking: { id: booking.id } },
     });
 
     return {
@@ -153,14 +153,14 @@ export class AdminBookingsService {
     }
 
     const payment = await this.paymentRepo.findOne({
-      where: { bookingId: booking.id },
+      where: { booking: { id: booking.id } },
     });
 
     if (!payment) {
       throw new NotFoundException('Payment not found for this booking');
     }
 
-    if (payment.status === 'REFUNDED') {
+    if (payment.status === PaymentStatus.REFUNDED) {
       throw new BadRequestException('Payment has already been refunded');
     }
 
@@ -170,18 +170,16 @@ export class AdminBookingsService {
       );
     }
 
-    // Process refund
-    payment.status = 'REFUNDED';
+    payment.status = PaymentStatus.REFUNDED;
     payment.refundAmount = dto.amount;
     payment.refundReason = dto.reason;
-    payment.refundMethod = dto.method;
+    payment.refundMethod = dto.method as RefundMethod;
     payment.refundedAt = new Date();
 
     await this.paymentRepo.save(payment);
 
-    // Update booking status if not already cancelled
-    if (booking.status !== 'CANCELLED') {
-      booking.status = 'CANCELLED';
+    if (booking.status !== BookingStatus.CANCELLED) {
+      booking.status = BookingStatus.CANCELLED;
       await this.bookingRepo.save(booking);
     }
 

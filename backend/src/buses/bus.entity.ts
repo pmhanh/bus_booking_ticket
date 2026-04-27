@@ -1,9 +1,11 @@
 import {
   Column,
+  CreateDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { SeatMap } from '../seat-maps/seat-map.entity';
 
@@ -41,4 +43,11 @@ export class Bus {
   @ManyToOne(() => SeatMap, { nullable: true, eager: true })
   @JoinColumn({ name: 'seat_map_id' })
   seatMap?: SeatMap | null;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
 }

@@ -48,7 +48,7 @@ export class Trip {
   @Column({ type: 'enum', enum: TripStatus, default: TripStatus.SCHEDULED })
   status: TripStatus;
 
-  @OneToMany(() => Bo oking, (booking) => booking.trip)
+  @OneToMany(() => Booking, (booking) => booking.trip)
   bookings: Booking[];
 
   @OneToMany(() => Review, (r) => r.trip)

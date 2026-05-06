@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { User, UserStatus, UserRole } from './user.entity';
+import { User, UserStatus, UserRole, AuthProvider } from './user.entity';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -54,7 +54,7 @@ export class UsersService {
   findByIdWithRefreshToken(id: string) {
     return this.repo.findOne({
       where: { id },
-      select: ['id', 'email', 'role', 'refreshTokenHash', 'phone', 'avatarUrl'],
+      select: ['id', 'email', 'role', 'status', 'verified', 'refreshTokenHash', 'phone', 'avatarUrl'],
     });
   }
 
@@ -64,19 +64,15 @@ export class UsersService {
       email: dto.email,
       passwordHash: hash,
       fullName: dto.fullName,
-      provider: 'local',
+      provider: AuthProvider.LOCAL,
       verified: false,
-      status: 'pending',
+      status: UserStatus.PENDING,
     });
     return this.repo.save(user);
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    console.log('dto=', dto);
-    //await this.repo.update(userId, { ...dto });
-    //return this.findById(userId);
-    const result = await this.repo.update(userId, { ...dto });
-    console.log('affected=', result.affected);
+    await this.repo.update(userId, { ...dto });
     return this.findById(userId);
   }
 
@@ -86,7 +82,7 @@ export class UsersService {
   }
 
   async verifyUser(userId: string, currentStatus?: UserStatus) {
-    const nextStatus = currentStatus === 'banned' ? currentStatus : 'active';
+    const nextStatus = currentStatus === UserStatus.BANNED ? currentStatus : UserStatus.ACTIVE;
     await this.repo.update(userId, { verified: true, status: nextStatus });
     return this.findById(userId);
   }
@@ -113,10 +109,10 @@ export class UsersService {
     }
     const user = this.repo.create({
       email,
-      provider: 'google',
+      provider: AuthProvider.GOOGLE,
       verified: true,
-      role: 'user',
-      status: 'active',
+      role: UserRole.USER,
+      status: UserStatus.ACTIVE,
       ...profile,
     });
     return this.repo.save(user);

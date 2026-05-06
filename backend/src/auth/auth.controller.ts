@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -13,6 +14,7 @@ import {
   Req,
   UploadedFile,
   UseInterceptors,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
@@ -70,15 +72,20 @@ export class AuthController {
   @HttpCode(200)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = req.cookies?.refresh_token as string | undefined;
-    if (!token) return { accessToken: null };
+    if (!token) throw new UnauthorizedException('No refresh token');
     const result = await this.authService.refresh(token);
     this.setRefreshCookie(res, result.refreshToken);
     return { accessToken: result.accessToken };
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(200)
-  async logout(@Req() req: Request, @Res() res: Response) {
+  async logout(
+    @CurrentUser() user: JwtPayload,
+    @Res() res: Response,
+  ) {
+    await this.usersService.clearRefreshToken(user.sub);
     const cookieOptions = this.getRefreshCookieOptions();
     res.clearCookie('refresh_token', { ...cookieOptions, maxAge: 0 });
     return res.json({ message: 'Logged out' });
@@ -123,8 +130,7 @@ export class AuthController {
     const html = `<script>
       const data = JSON.parse(decodeURIComponent('${payload}'));
       if (window.opener) {
-        window.opener.postMessage({source:'google-login', payload: data}, '*');
-        // Let opener close the popup to avoid COOP warnings
+        window.opener.postMessage({source:'google-login', payload: data}, '${frontendUrl}');
         setTimeout(() => window.location.replace('${frontendUrl}'), 200);
       } else {
         window.location.replace('${frontendUrl}');
@@ -189,7 +195,7 @@ export class AuthController {
     )
     file?: Express.Multer.File,
   ) {
-    if (!file) throw new Error('No file uploaded');
+    if (!file) throw new BadRequestException('No file uploaded');
     const relativePath = `/uploads/avatars/${file.filename}`;
     const updated = await this.usersService.updateProfile(user.sub, {
       avatarUrl: relativePath,

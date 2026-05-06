@@ -1,6 +1,5 @@
 import { IsArray, IsIn, IsOptional, IsString } from 'class-validator';
 import { BusType } from '../bus.entity';
-import { Column } from 'typeorm/browser/decorator/columns/Column.js';
 
 export class UpdateBusDto {
   @IsOptional()

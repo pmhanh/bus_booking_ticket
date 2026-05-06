@@ -1,4 +1,4 @@
-import { ArrayNotEmpty, IsArray, IsInt, IsOptional, IsPositive } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsInt, IsOptional, IsPositive, IsString } from 'class-validator';
 
 export class CreateSeatHoldDto {
   @IsInt()
@@ -7,6 +7,7 @@ export class CreateSeatHoldDto {
 
   @IsArray()
   @ArrayNotEmpty()
+  @IsString({ each: true })
   seats!: string[];
 
   @IsOptional()

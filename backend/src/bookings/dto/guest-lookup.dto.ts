@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsPhoneNumber, IsString, Length } from 'class-validator';
+import { IsDateString, IsEmail, IsOptional, IsPhoneNumber, IsString, Length } from 'class-validator';
 
 export class GuestLookupDto {
   @IsOptional()
@@ -12,8 +12,7 @@ export class GuestLookupDto {
   phone?: string;
 
   @IsOptional()
-  @IsString()
-  @Length(5, 120)
+  @IsEmail()
   email?: string;
 
   @IsOptional()

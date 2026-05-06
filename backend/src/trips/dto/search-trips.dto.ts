@@ -1,6 +1,7 @@
 import {
   IsArray,
   IsDateString,
+  IsEnum,
   IsIn,
   IsInt,
   IsNumber,
@@ -11,6 +12,7 @@ import {
   Min,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { BusType } from '../../buses/bus.entity';
 
 export class SearchTripsDto {
   @IsOptional()
@@ -46,8 +48,8 @@ export class SearchTripsDto {
   maxPrice?: number;
 
   @IsOptional()
-  @IsString()
-  busType?: string;
+  @IsEnum(BusType)
+  busType?: BusType;
 
   @IsOptional()
   @IsArray()

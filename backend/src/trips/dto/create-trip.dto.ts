@@ -1,10 +1,5 @@
-import {
-  IsDateString,
-  IsInt,
-  IsIn,
-  IsOptional,
-  IsPositive,
-} from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsPositive } from 'class-validator';
+import { TripStatus } from '../trip.entity';
 
 export class CreateTripDto {
   @IsInt()
@@ -26,6 +21,6 @@ export class CreateTripDto {
   basePrice: number;
 
   @IsOptional()
-  @IsIn(['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'])
-  status?: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  @IsEnum(TripStatus)
+  status?: TripStatus;
 }

@@ -1,21 +1,14 @@
-import {
-  ArrayNotEmpty,
-  IsArray,
-  IsIn,
-  IsInt,
-  IsPositive,
-  Min,
-  ValidateNested,
-} from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsEnum, IsInt, IsPositive, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { RouteStopType } from '../../routes/route-stop.entity';
 
 class StopItemDto {
   @IsInt()
   @IsPositive()
   cityId: number;
 
-  @IsIn(['PICKUP', 'DROPOFF'])
-  type: 'PICKUP' | 'DROPOFF';
+  @IsEnum(RouteStopType)
+  type: RouteStopType;
 
   @IsInt()
   @IsPositive()

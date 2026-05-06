@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import type { Request, Response } from 'express';
 import * as bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import { UsersService } from '../users/users.service';
@@ -19,6 +18,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { VerifyRequestDto } from './dto/verify-request.dto';
 import { MailService } from '../mail/mail.service';
+import { AuthProvider, UserStatus } from '../users/user.entity';
 
 type Tokens = { accessToken: string; refreshToken: string };
 
@@ -38,6 +38,10 @@ export class AuthService {
       this.configService.get<string>('GOOGLE_REDIRECT_URI') ||
       'http://localhost:3000/api/auth/google/callback';
     this.oauthClient = new OAuth2Client(clientId, clientSecret, redirectUri);
+  }
+
+  private get frontendUrl(): string {
+    return this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
   }
 
   private async signTokens(payload: JwtPayload): Promise<Tokens> {
@@ -72,9 +76,9 @@ export class AuthService {
     const user = await this.usersService.findByEmailWithPassword(dto.email);
     if (!user || !user.passwordHash)
       throw new UnauthorizedException('Thông tin đăng nhập không hợp lệ');
-    if (user.status === 'banned')
+    if (user.status === UserStatus.BANNED)
       throw new ForbiddenException('Tài khoản bị cấm');
-    if (user.status === 'pending' || !user.verified)
+    if (user.status === UserStatus.PENDING || !user.verified)
       throw new ForbiddenException('Vui lòng xác thực email trước khi đăng nhập.');
     const passwordOk = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordOk)
@@ -109,7 +113,7 @@ export class AuthService {
         throw new UnauthorizedException('Token Google không hợp lệ');
       const user = await this.usersService.createFromProvider(payload.email, {
         fullName: payload.name,
-        provider: 'google',
+        provider: AuthProvider.GOOGLE,
         verified: payload.email_verified ?? true,
       });
       const sessionTokens = await this.signTokens({
@@ -138,6 +142,7 @@ export class AuthService {
       if (!user || !user.refreshTokenHash) throw new UnauthorizedException();
       const match = await bcrypt.compare(refreshToken, user.refreshTokenHash);
       if (!match) throw new UnauthorizedException();
+      if (user.status === UserStatus.BANNED) throw new UnauthorizedException();
       return this.signTokens({
         sub: user.id,
         email: user.email,
@@ -150,7 +155,7 @@ export class AuthService {
 
   async forgotPassword(dto: ForgotPasswordDto) {
     const user = await this.usersService.findByEmail(dto.email);
-    if (!user) throw new BadRequestException('Không tìm thấy nguời dùng');
+    if (!user) return { ok: true, message: 'Email đặt lại mật khẩu đã được gửi nếu tài khoản tồn tại.' };
     const token = await this.jwtService.signAsync(
       { sub: user.id, email: user.email, kind: 'reset' },
       {
@@ -158,9 +163,7 @@ export class AuthService {
         secret: this.configService.get('RESET_SECRET'),
       },
     );
-    const frontend =
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
-    const resetLink = `${frontend}/reset?token=${token}`;
+    const resetLink = `${this.frontendUrl}/reset?token=${token}`;
 
     await this.mailService.sendMail({
       to: user.email,
@@ -191,9 +194,7 @@ export class AuthService {
         secret: this.configService.get('VERIFY_SECRET'),
       },
     );
-    const frontend =
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
-    const verifyLink = `${frontend}/verify?token=${token}`;
+    const verifyLink = `${this.frontendUrl}/verify?token=${token}`;
 
     await this.mailService.sendMail({
       to: email,
@@ -213,46 +214,55 @@ export class AuthService {
       fallbackLog: `Liên kết xác thực cho ${email}: ${verifyLink}`,
       errorLabel: 'verification email',
     });
-    return token;
   }
 
   async requestVerification(dto: VerifyRequestDto) {
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) throw new BadRequestException('Không tìm thấy người dùng');
     if (user.verified) return { ok: true, message: 'Email đã được xác thực' };
-    const token = await this.sendVerification(user.email, user.id);
-    return { ok: true, token };
+    await this.sendVerification(user.email, user.id);
+    return { ok: true, message: 'Email xác thực đã được gửi.' };
   }
 
   async verify(dto: VerifyEmailDto) {
-    const payload = await this.jwtService.verifyAsync<{
-      sub: string;
-      kind: string;
-    }>(dto.token, {
-      secret: this.configService.get('VERIFY_SECRET'),
-    });
-    if (payload.kind !== 'verify') throw new UnauthorizedException();
-    const user = await this.usersService.findById(payload.sub);
-    if (!user) throw new UnauthorizedException();
-    if (user.status === 'banned')
-      throw new ForbiddenException('Tài khoản đã bị cấm');
-    await this.usersService.verifyUser(user.id, user.status);
-    return { ok: true };
+    try {
+      const payload = await this.jwtService.verifyAsync<{
+        sub: string;
+        kind: string;
+      }>(dto.token, {
+        secret: this.configService.get('VERIFY_SECRET'),
+      });
+      if (payload.kind !== 'verify') throw new UnauthorizedException();
+      const user = await this.usersService.findById(payload.sub);
+      if (!user) throw new UnauthorizedException();
+      if (user.status === UserStatus.BANNED)
+        throw new ForbiddenException('Tài khoản đã bị cấm');
+      await this.usersService.verifyUser(user.id, user.status);
+      return { ok: true };
+    } catch (err) {
+      if (err instanceof ForbiddenException || err instanceof UnauthorizedException) throw err;
+      throw new UnauthorizedException('Token xác thực không hợp lệ hoặc đã hết hạn');
+    }
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    const payload = await this.jwtService.verifyAsync<{
-      sub: string;
-      kind: string;
-    }>(dto.token, {
-      secret: this.configService.get('RESET_SECRET'),
-    });
-    if (payload.kind !== 'reset') throw new UnauthorizedException();
-    const user = await this.usersService.findById(payload.sub);
-    if (!user) throw new UnauthorizedException();
-    await this.usersService.clearRefreshToken(user.id);
-    await this.usersService.updatePassword(user.id, dto.newPassword);
-    return { ok: true };
+    try {
+      const payload = await this.jwtService.verifyAsync<{
+        sub: string;
+        kind: string;
+      }>(dto.token, {
+        secret: this.configService.get('RESET_SECRET'),
+      });
+      if (payload.kind !== 'reset') throw new UnauthorizedException();
+      const user = await this.usersService.findById(payload.sub);
+      if (!user) throw new UnauthorizedException();
+      await this.usersService.clearRefreshToken(user.id);
+      await this.usersService.updatePassword(user.id, dto.newPassword);
+      return { ok: true };
+    } catch (err) {
+      if (err instanceof UnauthorizedException) throw err;
+      throw new UnauthorizedException('Token đặt lại mật khẩu không hợp lệ hoặc đã hết hạn');
+    }
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {

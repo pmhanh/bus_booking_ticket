@@ -8,6 +8,13 @@ import {
 } from 'typeorm';
 import { SeatMap } from './seat-map.entity';
 
+export enum SeatType {
+  STANDARD = 'standard',
+  VIP = 'vip',
+  SLEEPER = 'sleeper',
+  WHEELCHAIR = 'wheelchair',
+}
+
 @Entity({ name: 'seat_definitions' })
 @Unique(['seatMap', 'code'])
 export class SeatDefinition {
@@ -27,9 +34,10 @@ export class SeatDefinition {
   @Column({ type: 'int' })
   col: number;
 
-  @Column({ default: 'standard' })
-  seatType: string;
+  @Column({ default: SeatType.STANDARD, type: 'enum', enum: SeatType })
+  seatType: SeatType;
 
   @Column({ default: true })
   isActive: boolean;
 }
+ 

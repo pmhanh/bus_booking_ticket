@@ -1,6 +1,10 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsInt, IsOptional, IsPositive, IsString } from 'class-validator';
 
 export class CreateCityDto {
+  @IsInt()
+  @IsPositive()
+  code: number;
+
   @IsString()
   name: string;
 
@@ -9,5 +13,9 @@ export class CreateCityDto {
 
   @IsOptional()
   @IsString()
-  country?: string;
+  divisionType?: string;
+
+  @IsOptional()
+  @IsString()
+  phoneCode?: string;
 }

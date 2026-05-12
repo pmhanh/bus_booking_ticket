@@ -1,22 +1,15 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
   HttpCode,
-  MaxFileSizeValidator,
-  ParseFilePipe,
   Post,
-  Put,
   UseGuards,
   Query,
   Res,
   Req,
-  UploadedFile,
-  UseInterceptors,
   UnauthorizedException,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
@@ -26,15 +19,11 @@ import type { JwtPayload } from './interfaces/jwt-payload';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { UpdateProfileDto } from '../users/dto/update-profile.dto';
 import { UsersService } from '../users/users.service';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { VerifyRequestDto } from './dto/verify-request.dto';
-import type { Response, Request, CookieOptions, Express } from 'express';
+import type { Response, Request, CookieOptions } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import * as fs from 'fs';
 
 @Controller('auth')
 export class AuthController {
@@ -45,7 +34,8 @@ export class AuthController {
   ) {}
 
   private getRefreshCookieOptions(): CookieOptions {
-    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    const isProduction =
+      this.configService.get<string>('NODE_ENV') === 'production';
     return {
       httpOnly: true,
       sameSite: isProduction ? 'none' : 'lax',
@@ -62,7 +52,10 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.authService.login(dto);
     this.setRefreshCookie(res, result.tokens.refreshToken);
     return { user: result.user, accessToken: result.tokens.accessToken };
@@ -70,7 +63,10 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(200)
-  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const token = req.cookies?.refresh_token as string | undefined;
     if (!token) throw new UnauthorizedException('No refresh token');
     const result = await this.authService.refresh(token);
@@ -81,16 +77,12 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(200)
-  async logout(
-    @CurrentUser() user: JwtPayload,
-    @Res() res: Response,
-  ) {
+  async logout(@CurrentUser() user: JwtPayload, @Res() res: Response) {
     await this.usersService.clearRefreshToken(user.sub);
     const cookieOptions = this.getRefreshCookieOptions();
     res.clearCookie('refresh_token', { ...cookieOptions, maxAge: 0 });
     return res.json({ message: 'Logged out' });
   }
-
 
   @Post('forgot')
   forgot(@Body() dto: ForgotPasswordDto) {
@@ -124,7 +116,10 @@ export class AuthController {
     const frontendUrl =
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const payload = encodeURIComponent(
-      JSON.stringify({ user: result.user, accessToken: result.tokens.accessToken }),
+      JSON.stringify({
+        user: result.user,
+        accessToken: result.tokens.accessToken,
+      }),
     );
     this.setRefreshCookie(res, result.tokens.refreshToken);
     const html = `<script>
@@ -146,61 +141,6 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ) {
     return this.authService.changePassword(user.sub, dto);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('me')
-  me(@CurrentUser() user: JwtPayload) {
-    return this.usersService.findById(user.sub);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Put('profile')
-  updateProfile(
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: UpdateProfileDto,
-  ) {
-    return this.usersService.updateProfile(user.sub, dto);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post('avatar')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const dir = join(process.cwd(), 'uploads', 'avatars');
-          fs.mkdirSync(dir, { recursive: true });
-          cb(null, dir);
-        },
-        filename: (req, file, cb) => {
-          const unique = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-          cb(null, `${unique}${extname(file.originalname)}`);
-        },
-      }),
-      fileFilter: (req, file, cb) => {
-        if (!file.mimetype.startsWith('image/')) {
-          return cb(new Error('Only image files are allowed'), false);
-        }
-        cb(null, true);
-      },
-    }),
-  )
-  async uploadAvatar(
-    @CurrentUser() user: JwtPayload,
-    @UploadedFile(
-      new ParseFilePipe({
-        validators: [new MaxFileSizeValidator({ maxSize: 3 * 1024 * 1024 })],
-      }),
-    )
-    file?: Express.Multer.File,
-  ) {
-    if (!file) throw new BadRequestException('No file uploaded');
-    const relativePath = `/uploads/avatars/${file.filename}`;
-    const updated = await this.usersService.updateProfile(user.sub, {
-      avatarUrl: relativePath,
-    });
-    return { avatarUrl: relativePath, user: updated };
   }
 
   private setRefreshCookie(res: Response, token: string) {

@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   }, [syncToken]);
 
   const loadProfile = useCallback(async () => {
-    const res = await api.get<User>('/auth/me');
+    const res = await api.get<User>('/users/me');
     setUser(res.data);
     return res.data;
   }, []);

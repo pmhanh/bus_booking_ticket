@@ -74,7 +74,7 @@ export const ProfilePage = () => {
     try {
       setSaving(true);
 
-      await apiClient('/auth/profile', {
+      await apiClient('/users/me/profile', {
         method: 'PUT',
         body: JSON.stringify({
           fullName: profile.fullName.trim(),
@@ -114,7 +114,7 @@ export const ProfilePage = () => {
     form.append('file', file);
     try {
       setUploading(true);
-      await api.post('/auth/avatar', form, {
+      await api.post('/users/me/avatar', form, {
         headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${accessToken}` },
       });
       showMessage({ type: 'success', title: 'Thành công', message: 'Đã cập nhật ảnh đại diện' });

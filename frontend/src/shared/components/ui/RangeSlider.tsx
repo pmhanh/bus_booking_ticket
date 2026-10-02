@@ -23,7 +23,10 @@ export const RangeSlider: React.FC<Props> = ({
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [activeThumb, setActiveThumb] = useState<0 | 1 | null>(null);
 
-  const clamp = (v: number) => Math.min(Math.max(v, min), max);
+  const clamp = useCallback(
+    (v: number) => Math.min(Math.max(v, min), max),
+    [min, max],
+  );
   const percent = (v: number) => ((clamp(v) - min) / (max - min)) * 100;
 
   const [from, to] = value;
@@ -36,12 +39,11 @@ export const RangeSlider: React.FC<Props> = ({
       const rect = track.getBoundingClientRect();
       const ratio = (clientX - rect.left) / rect.width;
       const raw = min + ratio * (max - min);
-      const snapped =
-        Math.round((raw - min) / step) * step + min;
+      const snapped = Math.round((raw - min) / step) * step + min;
 
       return clamp(snapped);
     },
-    [min, max, step, from],
+    [min, max, step, from, clamp],
   );
 
   useEffect(() => {
@@ -72,20 +74,16 @@ export const RangeSlider: React.FC<Props> = ({
 
     const handleUp = () => {
       setActiveThumb(null);
-      window.removeEventListener('mousemove', handleMove as any);
-      window.removeEventListener('touchmove', handleMove as any);
-      window.removeEventListener('mouseup', handleUp);
-      window.removeEventListener('touchend', handleUp);
     };
 
-    window.addEventListener('mousemove', handleMove as any);
-    window.addEventListener('touchmove', handleMove as any, { passive: false } as any);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('touchmove', handleMove, { passive: false });
     window.addEventListener('mouseup', handleUp);
     window.addEventListener('touchend', handleUp);
 
     return () => {
-      window.removeEventListener('mousemove', handleMove as any);
-      window.removeEventListener('touchmove', handleMove as any);
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('touchmove', handleMove);
       window.removeEventListener('mouseup', handleUp);
       window.removeEventListener('touchend', handleUp);
     };
@@ -94,8 +92,8 @@ export const RangeSlider: React.FC<Props> = ({
   const leftPercent = percent(from);
   const rightPercent = percent(to);
 
-  const handleThumbDown = (index: 0 | 1) =>
-    (e: React.MouseEvent | React.TouchEvent) => {
+  const handleThumbDown =
+    (index: 0 | 1) => (e: React.MouseEvent | React.TouchEvent) => {
       if (disabled) return;
       e.preventDefault();
       e.stopPropagation();

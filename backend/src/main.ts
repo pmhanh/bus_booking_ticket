@@ -3,10 +3,11 @@ import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import * as express from 'express';
-import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const expressApp = app.getHttpAdapter().getInstance() as express.Express;
+  expressApp.set('trust proxy', 1);
   app.setGlobalPrefix('api');
   app.use(cookieParser());
 
@@ -25,9 +26,11 @@ async function bootstrap() {
     ],
     credentials: true,
   });
-  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
-  app.use('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }));
+  app.use(
+    '/api/payments/stripe/webhook',
+    express.raw({ type: 'application/json' }),
+  );
 
   await app.listen(process.env.PORT ?? 3000);
 }
-bootstrap();
+void bootstrap();

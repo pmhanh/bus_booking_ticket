@@ -1,76 +1,51 @@
-import type { AxiosError } from 'axios';
-import { api, type AuthAxiosRequestConfig } from './api';
+import { CanceledError, type AxiosError } from 'axios';
+import { api, getAccessToken } from './api';
+import { expireSession, getSessionRevision, isUnauthorized, refreshAccessToken } from './authSession';
 
-let isRefreshing = false;
-let refreshPromise: Promise<string> | null = null;
-
-export function setupInterceptors(
-  getToken: () => string | null,
-  onTokenChange: (token: string | null) => void,
-  logout: () => void,
-) {
-  api.interceptors.request.use((config) => {
-    const cfg = config as AuthAxiosRequestConfig;
-    if (cfg.skipAuth) return cfg as unknown as typeof config;
-
-    const token = getToken();
-    if (token) {
-      const headers = (cfg.headers ?? {}) as Record<string, unknown>;
-      if (!('Authorization' in headers)) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-      cfg.headers = headers as typeof cfg.headers;
+export function setupInterceptors() {
+  const requestId = api.interceptors.request.use((config) => {
+    if (config.skipAuth) return config;
+    if (config._authRevision !== undefined && config._authRevision !== getSessionRevision()) {
+      throw new CanceledError('Phiên đăng nhập đã thay đổi.');
     }
-    return cfg as unknown as typeof config;
+    config._authRevision = getSessionRevision();
+    const token = getAccessToken();
+    if (token) config.headers.set('Authorization', `Bearer ${token}`);
+    else config.headers.delete('Authorization');
+    return config;
   });
 
-  api.interceptors.response.use(
-    (res) => res,
+  const responseId = api.interceptors.response.use(
+    (response) => response,
     async (error: AxiosError) => {
-      const original = error.config as AuthAxiosRequestConfig & { _retry?: boolean };
-      const status = error.response?.status;
-
-      const url: string = original?.url || "";
-      if (url.includes("/auth/refresh") || url.includes("/auth/logout")) {
-      return Promise.reject(error);
-    }
-
-      if (!status || status !== 401 || !original) {
-        return Promise.reject(error);
-      }
-
-      if (original._retry || (original.url ?? '').includes('/auth/refresh')) {
-        logout();
-        return Promise.reject(error);
+      const original = error.config;
+      if (!original || original.skipAuth || !isUnauthorized(error)) throw error;
+      const expected = original._authRevision;
+      if (expected !== getSessionRevision()) throw error;
+      // Guest requests must not start a refresh loop.
+      const token = getAccessToken();
+      if (!token) throw error;
+      if (original._retry) {
+        expireSession(expected);
+        throw error;
       }
       original._retry = true;
-
       try {
-        if (!isRefreshing) {
-          isRefreshing = true;
-          refreshPromise = api
-            .post<{ accessToken: string }>('/auth/refresh', {}, { skipAuth: true })
-            .then((r) => {
-              const newToken = r.data?.accessToken;
-              onTokenChange(newToken ?? null);
-              return newToken;
-            })
-            .finally(() => {
-              isRefreshing = false;
-              refreshPromise = null;
-            });
+        // A delayed 401 can belong to a token that another request already replaced.
+        if (original.headers.get('Authorization') === `Bearer ${token}`) {
+          await refreshAccessToken();
         }
-
-        const newToken = await refreshPromise!;
-        if (!newToken) throw error;
-
-        original.headers = original.headers ?? {};
-        original.headers.Authorization = `Bearer ${newToken}`;
-        return api(original);
-      } catch (err) {
-        logout();
-        return Promise.reject(err);
+      } catch (refreshError) {
+        if (isUnauthorized(refreshError)) expireSession(expected);
+        throw refreshError;
       }
+      if (expected !== getSessionRevision()) throw new CanceledError('Phiên đăng nhập đã thay đổi.');
+      return api.request(original);
     },
   );
+
+  return () => {
+    api.interceptors.request.eject(requestId);
+    api.interceptors.response.eject(responseId);
+  };
 }

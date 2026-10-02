@@ -1,5 +1,7 @@
+import { getErrorMessage } from '../../../shared/utils/errorMessage';
+import { validateEmail } from '../../../shared/utils/validation';
 import type { FormEvent } from 'react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../../../shared/components/ui/Button';
 import { Card } from '../../../shared/components/ui/Card';
@@ -14,14 +16,7 @@ export const ForgotPasswordPage = () => {
   const [fieldError, setFieldError] = useState<string | undefined>(undefined);
   const [sending, setSending] = useState(false);
 
-  const validateEmail = (value: string) => {
-    const v = value.trim();
-    if (!v) return 'Vui lòng nhập email';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'Email không đúng định dạng';
-    return undefined;
-  };
-
-  const isValid = useMemo(() => !validateEmail(email), [email]);
+  const isValid = !validateEmail(email);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -35,7 +30,7 @@ export const ForgotPasswordPage = () => {
 
       await apiClient('/auth/forgot', {
         method: 'POST',
-        body: JSON.stringify({ email: email.trim() }),
+        body: { email: email.trim() },
       });
 
       showMessage({
@@ -44,10 +39,7 @@ export const ForgotPasswordPage = () => {
         message: 'Liên kết đặt lại đã được gửi tới email của bạn.',
       });
     } catch (error) {
-      const msg =
-        (error as any)?.response?.data?.message ||
-        (error as any)?.message ||
-        'Không thể gửi email khôi phục';
+      const msg = getErrorMessage(error, 'Không thể gửi email khôi phục');
 
       showMessage({ type: 'error', title: 'Gửi thất bại', message: msg });
     } finally {
@@ -77,7 +69,11 @@ export const ForgotPasswordPage = () => {
             placeholder="you@example.com"
           />
 
-          <Button type="submit" className="w-full" disabled={!isValid || sending}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!isValid || sending}
+          >
             {sending ? 'Đang gửi...' : 'Gửi liên kết đặt lại'}
           </Button>
         </form>

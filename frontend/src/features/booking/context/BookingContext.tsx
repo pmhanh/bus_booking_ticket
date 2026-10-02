@@ -1,4 +1,11 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from 'react';
+import type { Trip } from '../../trip/types/trip';
 
 export type SelectedSeat = { code: string; price: number };
 
@@ -22,22 +29,30 @@ export type Passenger = {
   idNumber: string;
 };
 
-type TripLike = any;
+type PendingBooking = { id: string; email: string; phone: string };
 
 type BookingContextValue = {
-  trip: TripLike | null;
-  setTrip: (trip: TripLike | null) => void;
+  trip: Trip | null;
+  setTrip: (trip: Trip | null) => void;
 
   selectedSeats: SelectedSeat[];
   setSelectedSeats: React.Dispatch<React.SetStateAction<SelectedSeat[]>>;
 
   hold: HoldState | null;
   setHold: (hold: HoldState | null) => void;
+  pendingBooking: PendingBooking | null;
+  setPendingBooking: (booking: PendingBooking | null) => void;
+  resetSelection: () => void;
+  changingSeats: boolean;
+  setChangingSeats: (changing: boolean) => void;
 
   passengers: Passenger[];
   setPassengers: React.Dispatch<React.SetStateAction<Passenger[]>>;
   initPassengersFromSeats: (seatCodes: string[]) => void;
-  updatePassenger: (seatCode: string, data: Partial<Omit<Passenger, "seatCode">>) => void;
+  updatePassenger: (
+    seatCode: string,
+    data: Partial<Omit<Passenger, 'seatCode'>>,
+  ) => void;
 
   contact: Contact;
   setContact: (data: Partial<Contact>) => void;
@@ -55,36 +70,43 @@ type BookingContextValue = {
 
 const BookingContext = createContext<BookingContextValue | null>(null);
 
-const EMPTY_CONTACT: Contact = { name: "", email: "", phone: "" };
+const EMPTY_CONTACT: Contact = { name: '', email: '', phone: '' };
 
-export const BookingProvider = ({ children }: { children: React.ReactNode }) => {
-  const [trip, _setTrip] = useState<TripLike | null>(null);
+export const BookingProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
+  const [trip, setTrip] = useState<Trip | null>(null);
   const [selectedSeats, setSelectedSeats] = useState<SelectedSeat[]>([]);
   const [hold, _setHold] = useState<HoldState | null>(null);
+  const [pendingBooking, setPendingBooking] = useState<PendingBooking | null>(
+    null,
+  );
+  const [changingSeats, setChangingSeats] = useState(false);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [contact, _setContact] = useState<Contact>(EMPTY_CONTACT);
   const [pickupStopId, setPickupStopId] = useState<number | null>(null);
   const [dropoffStopId, setDropoffStopId] = useState<number | null>(null);
 
-  const setTrip = useCallback((t: TripLike | null) => _setTrip(t), []);
-
   const setHold = useCallback((h: HoldState | null) => {
     _setHold(h);
+    setPendingBooking(null);
   }, []);
 
   const initPassengersFromSeats = useCallback((seatCodes: string[]) => {
     setPassengers(
       seatCodes.map((seatCode) => ({
         seatCode,
-        name: "",
-        phone: "",
-        idNumber: "",
+        name: '',
+        phone: '',
+        idNumber: '',
       })),
     );
   }, []);
 
   const updatePassenger = useCallback(
-    (seatCode: string, data: Partial<Omit<Passenger, "seatCode">>) => {
+    (seatCode: string, data: Partial<Omit<Passenger, 'seatCode'>>) => {
       setPassengers((prev) =>
         prev.map((p) => (p.seatCode === seatCode ? { ...p, ...data } : p)),
       );
@@ -101,15 +123,20 @@ export const BookingProvider = ({ children }: { children: React.ReactNode }) => 
     return selectedSeats.reduce((sum, s) => sum + (s.price || 0), 0);
   }, [selectedSeats]);
 
-  const clear = useCallback(() => {
-    _setTrip(null);
+  const resetSelection = useCallback(() => {
     setSelectedSeats([]);
     _setHold(null);
     setPassengers([]);
+    setPendingBooking(null);
+  }, []);
+
+  const clear = useCallback(() => {
+    setTrip(null);
+    resetSelection();
     _setContact(EMPTY_CONTACT);
     setPickupStopId(null);
     setDropoffStopId(null);
-  }, []);
+  }, [resetSelection]);
 
   const value: BookingContextValue = useMemo(
     () => ({
@@ -119,6 +146,11 @@ export const BookingProvider = ({ children }: { children: React.ReactNode }) => 
       setSelectedSeats,
       hold,
       setHold,
+      pendingBooking,
+      setPendingBooking,
+      resetSelection,
+      changingSeats,
+      setChangingSeats,
       passengers,
       setPassengers,
       initPassengersFromSeats,
@@ -138,6 +170,9 @@ export const BookingProvider = ({ children }: { children: React.ReactNode }) => 
       selectedSeats,
       hold,
       setHold,
+      pendingBooking,
+      resetSelection,
+      changingSeats,
       passengers,
       initPassengersFromSeats,
       updatePassenger,
@@ -150,11 +185,14 @@ export const BookingProvider = ({ children }: { children: React.ReactNode }) => 
     ],
   );
 
-  return <BookingContext.Provider value={value}>{children}</BookingContext.Provider>;
+  return (
+    <BookingContext.Provider value={value}>{children}</BookingContext.Provider>
+  );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useBooking = () => {
   const ctx = useContext(BookingContext);
-  if (!ctx) throw new Error("useBooking must be used within BookingProvider");
+  if (!ctx) throw new Error('useBooking must be used within BookingProvider');
   return ctx;
 };

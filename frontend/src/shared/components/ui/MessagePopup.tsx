@@ -1,62 +1,140 @@
-import type { PropsWithChildren } from 'react';
+import { useEffect, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { Button } from './Button';
 
-type MessagePopupProps = PropsWithChildren<{
+type MessagePopupProps = {
   open: boolean;
   message: string;
   type?: 'success' | 'error' | 'info';
   title?: string;
-  onClose?: () => void;
-}>;
+  confirmText?: string;
+  cancelText?: string;
+  danger?: boolean;
+  onConfirm?: () => void;
+  onClose: () => void;
+};
 
 export const MessagePopup = ({
   open,
   message,
   type = 'info',
   title,
+  confirmText = 'Xác nhận',
+  cancelText = 'Hủy',
+  danger = false,
+  onConfirm,
   onClose,
-  children,
 }: MessagePopupProps) => {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const messageId = useId();
+  useEffect(() => {
+    if (!open) return;
+    const dialog = dialogRef.current;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    dialog?.showModal();
+    document.body.style.overflow = 'hidden';
+    return () => {
+      dialog?.close();
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected)
+        previousFocus.focus();
+    };
+  }, [open]);
+
+  const isConfirmation = Boolean(onConfirm);
+  const heading =
+    title ||
+    (isConfirmation
+      ? 'Xác nhận thao tác'
+      : {
+          success: 'Thành công',
+          error: 'Đã xảy ra lỗi',
+          info: 'Thông báo',
+        }[type]);
+  const tone = isConfirmation ? 'warning' : type;
   if (!open) return null;
 
-  const tone = {
-    success: 'border-emerald-300 bg-emerald-500/10 text-emerald-50',
-    error: 'border-rose-300 bg-rose-500/10 text-rose-50',
-    info: 'border-white/20 bg-white/10 text-white',
-  }[type];
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div
-        role="alertdialog"
-        aria-live="assertive"
-        aria-label={title || 'Thông báo'}
-        className={clsx(
-          'relative w-full max-w-md rounded-2xl border shadow-xl shadow-black/40 p-5',
-          'bg-surface',
-          tone,
-        )}
-      >
-        <div className="flex items-start gap-3">
-          <div className="flex-1 space-y-2">
-            <div className="text-lg font-semibold">{title || 'Thông báo'}</div>
-            <div className="text-sm leading-relaxed whitespace-pre-line">{message}</div>
-            {children ? <div className="pt-2">{children}</div> : null}
+  return createPortal(
+    <dialog
+      ref={dialogRef}
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={messageId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      className="m-auto w-[calc(100%-2rem)] max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-white/15 bg-slate-900 p-0 text-white shadow-2xl backdrop:bg-black/65 backdrop:backdrop-blur-sm"
+    >
+      <div className="p-6">
+        <div className="flex items-start gap-4">
+          <div
+            aria-hidden="true"
+            className={clsx(
+              'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl font-bold',
+              {
+                'bg-emerald-500/15 text-emerald-300': tone === 'success',
+                'bg-rose-500/15 text-rose-300': tone === 'error',
+                'bg-sky-500/15 text-sky-300': tone === 'info',
+                'bg-amber-500/15 text-amber-300': tone === 'warning',
+              },
+            )}
+          >
+            {tone === 'success' ? '✓' : tone === 'info' ? 'i' : '!'}
           </div>
-          {onClose ? (
-            <Button variant="ghost" onClick={onClose} aria-label="Close message" className="px-2 py-1">
-              ✕
-            </Button>
-          ) : null}
+          <div className="min-w-0 flex-1">
+            <h2 id={titleId} className="text-lg font-semibold">
+              {heading}
+            </h2>
+            <p
+              id={messageId}
+              className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-slate-300"
+            >
+              {message}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Đóng thông báo"
+            className="rounded-lg px-2 py-1 text-slate-400 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+          >
+            ✕
+          </button>
         </div>
-        {!onClose ? null : (
-          <div className="mt-4 flex justify-end">
-            <Button onClick={onClose}>Đóng</Button>
-          </div>
-        )}
+        <div className="mt-6 flex justify-end gap-3">
+          {isConfirmation ? (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                autoFocus
+                onClick={onClose}
+              >
+                {cancelText}
+              </Button>
+              <Button
+                type="button"
+                onClick={onConfirm}
+                className={
+                  danger ? '!bg-rose-600 hover:!bg-rose-500' : undefined
+                }
+              >
+                {confirmText}
+              </Button>
+            </>
+          ) : (
+            <Button type="button" autoFocus onClick={onClose}>
+              Đóng
+            </Button>
+          )}
+        </div>
       </div>
-    </div>
+    </dialog>,
+    document.body,
   );
 };

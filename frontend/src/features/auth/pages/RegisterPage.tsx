@@ -1,12 +1,14 @@
+import { getErrorMessage } from '../../../shared/utils/errorMessage';
+import { validateEmail } from '../../../shared/utils/validation';
 import type { FormEvent } from 'react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../../../shared/components/ui/Button';
 import { Card } from '../../../shared/components/ui/Card';
 import { FormField } from '../../../shared/components/ui/FormField';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../../../shared/providers/ToastProvider';
-import { usePasswordValidation } from '../hooks/usePasswordValidation';
+import { validatePassword } from '../utils/passwordValidation';
 
 type RegisterForm = { fullName: string; email: string; password: string };
 type FieldErrors = { fullName?: string; email?: string; password?: string };
@@ -14,13 +16,15 @@ type FieldErrors = { fullName?: string; email?: string; password?: string };
 export const RegisterPage = () => {
   const { register } = useAuth();
   const { showMessage } = useToast();
-  const { validatePassword } = usePasswordValidation();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState<RegisterForm>({ fullName: '', email: '', password: '' });
+  const [form, setForm] = useState<RegisterForm>({
+    fullName: '',
+    email: '',
+    password: '',
+  });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  // ✅ Client-side validation: fullName required, email format, password rule (hook)
   const validate = (nextForm: RegisterForm): FieldErrors => {
     const errors: FieldErrors = {};
 
@@ -28,14 +32,9 @@ export const RegisterPage = () => {
     if (!nextForm.fullName.trim()) errors.fullName = 'Vui lòng nhập họ tên';
 
     // Email
-    const email = nextForm.email.trim();
-    if (!email) {
-      errors.email = 'Vui lòng nhập email';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = 'Email không đúng định dạng';
-    }
+    const emailError = validateEmail(nextForm.email);
+    if (emailError) errors.email = emailError;
 
-    // Password (business rule của FE qua hook)
     const pwdError = validatePassword(nextForm.password);
     if (pwdError) errors.password = pwdError;
 
@@ -43,7 +42,7 @@ export const RegisterPage = () => {
   };
 
   // ✅ dùng để disable submit + check nhanh
-  const isValid = useMemo(() => Object.keys(validate(form)).length === 0, [form]);
+  const isValid = Object.keys(validate(form)).length === 0;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -57,17 +56,22 @@ export const RegisterPage = () => {
       showMessage({
         type: 'success',
         title: 'Đăng ký thành công',
-        message: message || 'Email xác thực đã được gửi. Vui lòng kiểm tra hộp thư.',
+        message:
+          message || 'Email xác thực đã được gửi. Vui lòng kiểm tra hộp thư.',
       });
       setTimeout(() => navigate('/login'), 1200);
     } catch (err) {
       // Ưu tiên message từ backend nếu có
-      const backendMsg =
-        (err as any)?.response?.data?.message ||
-        (err as any)?.message ||
-        'Đăng ký thất bại, vui lòng thử lại';
+      const backendMsg = getErrorMessage(
+        err,
+        'Đăng ký thất bại, vui lòng thử lại',
+      );
 
-      showMessage({ type: 'error', title: 'Đăng ký thất bại', message: backendMsg });
+      showMessage({
+        type: 'error',
+        title: 'Đăng ký thất bại',
+        message: backendMsg,
+      });
     }
   };
 
@@ -86,12 +90,18 @@ export const RegisterPage = () => {
 
               // ✅ validate realtime cho riêng field fullName
               const errors = validate(nextForm);
-              setFieldErrors((prev) => ({ ...prev, fullName: errors.fullName }));
+              setFieldErrors((prev) => ({
+                ...prev,
+                fullName: errors.fullName,
+              }));
             }}
             onBlur={() => {
               // ✅ validate khi rời field
               const errors = validate(form);
-              setFieldErrors((prev) => ({ ...prev, fullName: errors.fullName }));
+              setFieldErrors((prev) => ({
+                ...prev,
+                fullName: errors.fullName,
+              }));
             }}
             error={fieldErrors.fullName}
           />
@@ -129,13 +139,18 @@ export const RegisterPage = () => {
               const nextForm = { ...form, password };
               setForm(nextForm);
 
-              // ✅ validate realtime password bằng hook
               const errors = validate(nextForm);
-              setFieldErrors((prev) => ({ ...prev, password: errors.password }));
+              setFieldErrors((prev) => ({
+                ...prev,
+                password: errors.password,
+              }));
             }}
             onBlur={() => {
               const errors = validate(form);
-              setFieldErrors((prev) => ({ ...prev, password: errors.password }));
+              setFieldErrors((prev) => ({
+                ...prev,
+                password: errors.password,
+              }));
             }}
             error={fieldErrors.password}
           />

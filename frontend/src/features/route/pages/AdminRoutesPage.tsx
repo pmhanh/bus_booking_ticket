@@ -1,4 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  optionTextStyle,
+  placeholderOptionStyle,
+  parseSelectNumber,
+} from '../../../shared/utils/select';
+import { useToast } from '../../../shared/providers/ToastProvider';
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import { Card } from '../../../shared/components/ui/Card';
 import { Button } from '../../../shared/components/ui/Button';
 import { FormField } from '../../../shared/components/ui/FormField';
@@ -6,6 +18,7 @@ import { apiClient } from '../../../shared/api/api';
 import { useAuth } from '../../auth/context/AuthContext';
 import type { Route, RouteStop } from '../types/route';
 import type { City } from '../types/city';
+import { searchCities } from '../api/cities';
 
 type RouteForm = {
   id?: number;
@@ -16,22 +29,30 @@ type RouteForm = {
 };
 
 type StopDraft = {
+  id?: number;
   cityId: number | '';
+  type: 'PICKUP' | 'DROPOFF';
+  order: number | '';
+  estimatedOffsetMinutes: number | '';
+};
+
+type StopPayload = {
+  id?: number;
+  cityId: number;
   type: 'PICKUP' | 'DROPOFF';
   order: number;
   estimatedOffsetMinutes: number;
 };
 
-const optionTextStyle: React.CSSProperties = { color: '#111' }; // FIX: native dropdown nền trắng -> chữ phải đen
-const placeholderOptionStyle: React.CSSProperties = { color: '#666' };
-
-const parseSelectNumber = (value: string): number | '' => {
-  if (value === '') return '';
-  const n = Number(value);
-  return Number.isFinite(n) ? n : '';
-};
+const createEmptyStopDraft = (order: number): StopDraft => ({
+  cityId: '',
+  type: 'PICKUP',
+  order,
+  estimatedOffsetMinutes: 0,
+});
 
 export const AdminRoutesPage = () => {
+  const { showError, showSuccess } = useToast();
   const { accessToken } = useAuth();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [total, setTotal] = useState(0);
@@ -44,46 +65,132 @@ export const AdminRoutesPage = () => {
     destinationCityId: '',
     estimatedDurationMinutes: '',
   });
+  const [createStopsDraft, setCreateStopsDraft] = useState<StopDraft[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [stopsRouteId, setStopsRouteId] = useState<number | null>(null);
   const [stopsDraft, setStopsDraft] = useState<StopDraft[]>([]);
-  const [error, setError] = useState('');
 
-  const headers = useMemo(
-    () => ({ Authorization: `Bearer ${accessToken}` }),
-    [accessToken],
-  );
+  const [citiesLoading, setCitiesLoading] = useState(false);
 
-  const loadCities = useCallback(
-    () => apiClient<City[]>('/admin/cities', { headers }).then(setCities),
-    [headers],
-  );
+  const [syncingCities, setSyncingCities] = useState(false);
+  const [savingStops, setSavingStops] = useState(false);
 
-  const loadRoutes = useCallback(
-    () => {
-      const params = new URLSearchParams();
-      params.append('limit', String(limit));
-      params.append('offset', String(offset));
-      return apiClient<{ routes: Route[]; total: number }>(`/admin/routes?${params.toString()}`, { headers }).then((data) => {
-        setRoutes(data.routes);
-        setTotal(data.total);
-      });
-    },
-    [headers, limit, offset],
-  );
+  const loadCities = useCallback(async () => {
+    setCitiesLoading(true);
+
+    try {
+      setCities(await searchCities('', 100));
+    } catch (err) {
+      setCities([]);
+      showError((err as Error).message);
+    } finally {
+      setCitiesLoading(false);
+    }
+  }, [showError]);
+
+  const loadRoutes = useCallback(async () => {
+    const params = new URLSearchParams();
+    params.append('limit', String(limit));
+    params.append('offset', String(offset));
+    const data = await apiClient<{ routes: Route[]; total: number }>(
+      `/admin/routes?${params.toString()}`,
+    );
+    setRoutes(data.routes);
+    setTotal(data.total);
+  }, [limit, offset]);
 
   useEffect(() => {
     if (!accessToken) return;
-    loadCities();
-    loadRoutes();
+    void loadCities();
+    void loadRoutes();
   }, [accessToken, loadCities, loadRoutes]);
+
+  const syncCities = async () => {
+    setSyncingCities(true);
+
+    try {
+      const response = await apiClient<{ ok: boolean; count: number }>(
+        '/cities/sync',
+        { method: 'POST' },
+      );
+      await loadCities();
+      showSuccess(`Đã đồng bộ ${response.count} thành phố từ API.`);
+    } catch (err) {
+      showError((err as Error).message);
+    } finally {
+      setSyncingCities(false);
+    }
+  };
+
+  const updateStopDraftAt = (
+    setter: Dispatch<SetStateAction<StopDraft[]>>,
+    index: number,
+    patch: Partial<StopDraft>,
+  ) => {
+    setter((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    );
+  };
+
+  const removeStopDraftAt = (
+    setter: Dispatch<SetStateAction<StopDraft[]>>,
+    index: number,
+  ) => {
+    setter((prev) =>
+      prev
+        .filter((_, i) => i !== index)
+        .map((item, i) => ({ ...item, order: i + 1 })),
+    );
+  };
+
+  const normalizeStopsDraft = (
+    draft: StopDraft[],
+    onError: (message: string) => void,
+  ): StopPayload[] | null => {
+    const normalized: StopPayload[] = [];
+
+    for (let index = 0; index < draft.length; index += 1) {
+      const stop = draft[index];
+
+      if (!stop.cityId) {
+        onError(`Vui lòng chọn thành phố cho điểm dừng #${index + 1}.`);
+        return null;
+      }
+      if (
+        stop.order === '' ||
+        !Number.isInteger(stop.order) ||
+        stop.order <= 0
+      ) {
+        onError(`Thứ tự của điểm dừng #${index + 1} không hợp lệ.`);
+        return null;
+      }
+      if (
+        stop.estimatedOffsetMinutes === '' ||
+        !Number.isInteger(stop.estimatedOffsetMinutes) ||
+        stop.estimatedOffsetMinutes < 0
+      ) {
+        onError(`Độ lệch thời gian của điểm dừng #${index + 1} không hợp lệ.`);
+        return null;
+      }
+
+      normalized.push({
+        ...(stop.id ? { id: stop.id } : {}),
+        cityId: Number(stop.cityId),
+        type: stop.type,
+        order: Number(stop.order),
+        estimatedOffsetMinutes: Number(stop.estimatedOffsetMinutes),
+      });
+    }
+
+    return normalized;
+  };
 
   const autoName = (originId?: number | '', destId?: number | '') => {
     if (!originId || !destId) return '';
-    const origin = cities.find((c) => c.id === originId);
-    const dest = cities.find((c) => c.id === destId);
-    if (!origin || !dest) return '';
-    return `${origin.name} - ${dest.name}`;
+    const origin = cities.find((city) => city.id === originId);
+    const destination = cities.find((city) => city.id === destId);
+    if (!origin || !destination) return '';
+    return `${origin.name} - ${destination.name}`;
   };
 
   const resetForm = () => {
@@ -93,65 +200,84 @@ export const AdminRoutesPage = () => {
       destinationCityId: '',
       estimatedDurationMinutes: '',
     });
+    setCreateStopsDraft([]);
     setEditingId(null);
   };
 
   const submitRoute = async () => {
-    setError('');
-
-    if (!form.originCityId || !form.destinationCityId || !form.estimatedDurationMinutes) {
-      setError('Vui lòng nhập đủ thông tin tuyến.');
+    if (
+      !form.originCityId ||
+      !form.destinationCityId ||
+      !form.estimatedDurationMinutes
+    ) {
+      showError('Vui lòng nhập đủ thông tin tuyến.');
       return;
     }
     if (form.originCityId === form.destinationCityId) {
-      setError('Điểm đi và điểm đến không được trùng nhau.');
+      showError('Điểm đi và điểm đến không được trùng nhau.');
       return;
     }
-
-    const auto = autoName(form.originCityId, form.destinationCityId);
-    const name = form.name || auto;
 
     const originCityId = Number(form.originCityId);
     const destinationCityId = Number(form.destinationCityId);
     const estimatedDurationMinutes = Number(form.estimatedDurationMinutes);
+    const name =
+      form.name || autoName(form.originCityId, form.destinationCityId);
 
     if (!Number.isFinite(originCityId) || originCityId <= 0) {
-      setError('Vui lòng chọn điểm đi hợp lệ.');
+      showError('Vui lòng chọn điểm đi hợp lệ.');
       return;
     }
     if (!Number.isFinite(destinationCityId) || destinationCityId <= 0) {
-      setError('Vui lòng chọn điểm đến hợp lệ.');
+      showError('Vui lòng chọn điểm đến hợp lệ.');
       return;
     }
-    if (!Number.isFinite(estimatedDurationMinutes) || estimatedDurationMinutes <= 0) {
-      setError('Thời gian phải là số phút dương.');
+    if (
+      !Number.isFinite(estimatedDurationMinutes) ||
+      estimatedDurationMinutes <= 0
+    ) {
+      showError('Thời gian phải là số phút dương.');
       return;
     }
 
-    const payload = { name, originCityId, destinationCityId, estimatedDurationMinutes };
+    const payload: {
+      name: string;
+      originCityId: number;
+      destinationCityId: number;
+      estimatedDurationMinutes: number;
+      stops?: StopPayload[];
+    } = {
+      name,
+      originCityId,
+      destinationCityId,
+      estimatedDurationMinutes,
+    };
+
+    if (!editingId && createStopsDraft.length > 0) {
+      const normalizedStops = normalizeStopsDraft(createStopsDraft, showError);
+      if (!normalizedStops) return;
+      payload.stops = normalizedStops;
+    }
 
     try {
       if (editingId) {
         await apiClient(`/admin/routes/${editingId}`, {
           method: 'PATCH',
-          headers,
-          body: JSON.stringify(payload),
+          body: payload,
         });
       } else {
-        await apiClient('/admin/routes', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(payload),
-        });
+        await apiClient('/admin/routes', { method: 'POST', body: payload });
       }
+
       resetForm();
-      loadRoutes();
+      await loadRoutes();
     } catch (err) {
-      setError((err as Error).message);
+      showError((err as Error).message);
     }
   };
 
   const startEdit = (route: Route) => {
+    setCreateStopsDraft([]);
     setForm({
       id: route.id,
       name: route.name,
@@ -163,64 +289,188 @@ export const AdminRoutesPage = () => {
   };
 
   const loadStops = async (routeId: number) => {
-    const res = await apiClient<RouteStop[]>(`/admin/routes/${routeId}/stops`, { headers });
+    const res = await apiClient<RouteStop[]>(`/admin/routes/${routeId}/stops`);
     setStopsDraft(
-      res.map((s) => ({
-        cityId: s.city.id,
-        type: s.type,
-        order: s.order,
-        estimatedOffsetMinutes: s.estimatedOffsetMinutes,
+      res.map((stop) => ({
+        id: stop.id,
+        cityId: stop.city.id,
+        type: stop.type,
+        order: stop.order,
+        estimatedOffsetMinutes: stop.estimatedOffsetMinutes,
       })),
     );
     setStopsRouteId(routeId);
   };
 
-  const addStopRow = () => {
-    setStopsDraft((prev) => [
+  const addCreateStopRow = () => {
+    setCreateStopsDraft((prev) => [
       ...prev,
-      {
-        cityId: '',
-        type: 'PICKUP',
-        order: prev.length + 1,
-        estimatedOffsetMinutes: 0,
-      },
+      createEmptyStopDraft(prev.length + 1),
     ]);
+  };
+
+  const addStopRow = () => {
+    setStopsDraft((prev) => [...prev, createEmptyStopDraft(prev.length + 1)]);
   };
 
   const saveStops = async () => {
     if (!stopsRouteId) return;
 
-    // validate nhanh để khỏi gửi cityId = 0/NaN
-    for (const s of stopsDraft) {
-      if (!s.cityId) {
-        setError('Vui lòng chọn đầy đủ thành phố cho các điểm dừng.');
-        return;
-      }
+    const normalizedStops = normalizeStopsDraft(stopsDraft, showError);
+    if (!normalizedStops) return;
+
+    setSavingStops(true);
+    try {
+      await apiClient(`/admin/routes/${stopsRouteId}/stops`, {
+        method: 'POST',
+        body: { stops: normalizedStops },
+      });
+
+      setStopsRouteId(null);
+      setStopsDraft([]);
+      await loadRoutes();
+    } catch (err) {
+      showError((err as Error).message);
+    } finally {
+      setSavingStops(false);
+    }
+  };
+
+  const renderStopRows = (
+    draft: StopDraft[],
+    setter: Dispatch<SetStateAction<StopDraft[]>>,
+    emptyText: string,
+  ) => {
+    if (draft.length === 0) {
+      return <div className="text-sm text-gray-400">{emptyText}</div>;
     }
 
-    await apiClient(`/admin/routes/${stopsRouteId}/stops`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        stops: stopsDraft.map((s) => ({ ...s, cityId: Number(s.cityId) })),
-      }),
-    });
+    return (
+      <div className="space-y-3">
+        {draft.map((stop, idx) => (
+          <div
+            key={stop.id ?? `new-${idx}`}
+            className="grid md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_6rem_minmax(12rem,1.4fr)_auto] gap-3 items-end"
+          >
+            <label className="block text-sm text-gray-200">
+              <div className="mb-2 font-medium">Thành phố</div>
+              <select
+                className="h-10 w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+                value={stop.cityId === '' ? '' : String(stop.cityId)}
+                disabled={citiesLoading || cities.length === 0}
+                onChange={(e) =>
+                  updateStopDraftAt(setter, idx, {
+                    cityId: parseSelectNumber(e.target.value),
+                  })
+                }
+              >
+                <option value="" style={placeholderOptionStyle}>
+                  Chọn thành phố
+                </option>
+                {cities.map((city) => (
+                  <option
+                    key={city.id}
+                    value={String(city.id)}
+                    style={optionTextStyle}
+                  >
+                    {city.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-    setStopsRouteId(null);
-    setStopsDraft([]);
-    loadRoutes();
+            <label className="block text-sm text-gray-200">
+              <div className="mb-2 font-medium">Loại</div>
+              <select
+                className="h-10 w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+                value={stop.type}
+                onChange={(e) =>
+                  updateStopDraftAt(setter, idx, {
+                    type: e.target.value as StopDraft['type'],
+                  })
+                }
+              >
+                <option value="PICKUP" style={optionTextStyle}>
+                  Đón
+                </option>
+                <option value="DROPOFF" style={optionTextStyle}>
+                  Trả
+                </option>
+              </select>
+            </label>
+
+            <FormField
+              label="Thứ tự"
+              type="number"
+              min={1}
+              step={1}
+              value={stop.order}
+              className="h-10"
+              wrapperClassName="!mb-0 min-w-0"
+              onChange={(e) =>
+                updateStopDraftAt(setter, idx, {
+                  order: parseSelectNumber(e.target.value),
+                })
+              }
+            />
+
+            <FormField
+              label="Độ lệch thời gian (phút)"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="Nhập số phút"
+              value={stop.estimatedOffsetMinutes}
+              className="h-10"
+              wrapperClassName="!mb-0 min-w-0"
+              onChange={(e) => {
+                if (!/^\d*$/.test(e.target.value)) return;
+                updateStopDraftAt(setter, idx, {
+                  estimatedOffsetMinutes: parseSelectNumber(e.target.value),
+                });
+              }}
+            />
+
+            <Button
+              variant="ghost"
+              onClick={() => removeStopDraftAt(setter, idx)}
+              className="h-10"
+            >
+              Xóa
+            </Button>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="grid grid-cols-1 items-center gap-3 xl:grid-cols-[1fr_auto_1fr]">
+        <div className="text-center xl:col-start-2">
           <h1 className="text-2xl font-bold text-white">Tuyến đường</h1>
-          <p className="text-sm text-gray-400">Quản lý tuyến, điểm đón/trả.</p>
+          <p className="text-sm text-gray-400">
+            Quản lý các tuyến đường, điểm đi/đến và trạm dừng.
+          </p>
         </div>
+        <Button
+          variant="secondary"
+          onClick={syncCities}
+          loading={syncingCities}
+          className="justify-self-center xl:justify-self-end"
+        >
+          Đồng bộ thành phố
+        </Button>
       </div>
 
       <Card title={editingId ? 'Cập nhật tuyến' : 'Thêm tuyến'}>
+        {!citiesLoading && cities.length === 0 ? (
+          <div className="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-100">
+            Chưa có dữ liệu thành phố nào. Vui lòng bấm "Đồng bộ thành phố" để
+            lấy dữ liệu từ API.
+          </div>
+        ) : null}
+
         <div className="grid md:grid-cols-2 gap-4">
           <FormField
             label="Tên tuyến"
@@ -232,8 +482,11 @@ export const AdminRoutesPage = () => {
             type="number"
             value={form.estimatedDurationMinutes}
             onChange={(e) => {
-              const v = e.target.value;
-              setForm({ ...form, estimatedDurationMinutes: v === '' ? '' : Number(v) });
+              const value = e.target.value;
+              setForm({
+                ...form,
+                estimatedDurationMinutes: value === '' ? '' : Number(value),
+              });
             }}
           />
 
@@ -242,6 +495,7 @@ export const AdminRoutesPage = () => {
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={form.originCityId === '' ? '' : String(form.originCityId)}
+              disabled={citiesLoading || cities.length === 0}
               onChange={(e) => {
                 const value = parseSelectNumber(e.target.value);
                 const newName = autoName(value, form.destinationCityId);
@@ -255,9 +509,13 @@ export const AdminRoutesPage = () => {
               <option value="" style={placeholderOptionStyle}>
                 Chọn thành phố
               </option>
-              {cities.map((c) => (
-                <option key={c.id} value={String(c.id)} style={optionTextStyle}>
-                  {c.name}
+              {cities.map((city) => (
+                <option
+                  key={city.id}
+                  value={String(city.id)}
+                  style={optionTextStyle}
+                >
+                  {city.name}
                 </option>
               ))}
             </select>
@@ -267,7 +525,12 @@ export const AdminRoutesPage = () => {
             <div className="mb-2 font-medium">Điểm đến</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
-              value={form.destinationCityId === '' ? '' : String(form.destinationCityId)}
+              value={
+                form.destinationCityId === ''
+                  ? ''
+                  : String(form.destinationCityId)
+              }
+              disabled={citiesLoading || cities.length === 0}
               onChange={(e) => {
                 const value = parseSelectNumber(e.target.value);
                 const newName = autoName(form.originCityId, value);
@@ -281,19 +544,48 @@ export const AdminRoutesPage = () => {
               <option value="" style={placeholderOptionStyle}>
                 Chọn thành phố
               </option>
-              {cities.map((c) => (
-                <option key={c.id} value={String(c.id)} style={optionTextStyle}>
-                  {c.name}
+              {cities.map((city) => (
+                <option
+                  key={city.id}
+                  value={String(city.id)}
+                  style={optionTextStyle}
+                >
+                  {city.name}
                 </option>
               ))}
             </select>
           </label>
         </div>
 
-        {error ? <div className="text-error text-sm mt-2">{error}</div> : null}
+        {!editingId ? (
+          <div className="mt-6 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-white">
+                  Trạm dừng khi tạo tuyến
+                </div>
+                <div className="text-sm text-gray-400">
+                  Có thể tạo tuyến và danh sách trạm dừng trong cùng một lần
+                  lưu.
+                </div>
+              </div>
+              <Button variant="secondary" onClick={addCreateStopRow}>
+                Thêm điểm
+              </Button>
+            </div>
+
+            {renderStopRows(
+              createStopsDraft,
+              setCreateStopsDraft,
+              'Chưa có trạm dừng nào. Nếu đây là tuyến không dừng giữa đường, bạn có thể bỏ qua.',
+            )}
+          </div>
+        ) : null}
 
         <div className="mt-4 flex gap-2">
-          <Button onClick={submitRoute}>{editingId ? 'Lưu thay đổi' : 'Tạo tuyến'}</Button>
+          <Button onClick={submitRoute}>
+            {editingId ? 'Lưu thay đổi' : 'Tạo tuyến'}
+          </Button>
           {editingId ? (
             <Button variant="secondary" onClick={resetForm}>
               Hủy
@@ -304,26 +596,29 @@ export const AdminRoutesPage = () => {
 
       <Card title="Danh sách tuyến">
         <div className="divide-y divide-white/5 text-sm text-gray-200">
-          {routes.map((r) => (
-            <div key={r.id} className="py-3 grid md:grid-cols-5 gap-3 items-center">
+          {routes.map((route) => (
+            <div
+              key={route.id}
+              className="py-3 grid md:grid-cols-5 gap-3 items-center"
+            >
               <div>
-                <div className="font-semibold text-white">{r.name}</div>
-                <div className="text-xs text-gray-400">{r.id}</div>
+                <div className="font-semibold text-white">{route.name}</div>
+                <div className="text-xs text-gray-400">{route.id}</div>
               </div>
               <div>
-                <div className="text-white">{r.originCity.name}</div>
+                <div className="text-white">{route.originCity.name}</div>
                 <div className="text-xs text-gray-400">Đi</div>
               </div>
               <div>
-                <div className="text-white">{r.destinationCity.name}</div>
+                <div className="text-white">{route.destinationCity.name}</div>
                 <div className="text-xs text-gray-400">Đến</div>
               </div>
-              <div>{r.estimatedDurationMinutes} phút</div>
+              <div>{route.estimatedDurationMinutes} phút</div>
               <div className="flex gap-2 justify-end">
-                <Button variant="secondary" onClick={() => startEdit(r)}>
+                <Button variant="secondary" onClick={() => startEdit(route)}>
                   Sửa
                 </Button>
-                <Button variant="secondary" onClick={() => loadStops(r.id)}>
+                <Button variant="secondary" onClick={() => loadStops(route.id)}>
                   Điểm đón/trả
                 </Button>
               </div>
@@ -331,10 +626,10 @@ export const AdminRoutesPage = () => {
           ))}
         </div>
 
-        {/* Pagination Controls */}
         <div className="mt-4 flex items-center justify-between text-sm text-gray-400 border-t border-white/5 pt-4">
           <div>
-            Hiển thị {offset + 1}-{Math.min(offset + limit, total)} trong tổng số {total} tuyến
+            Hiển thị {offset + 1}-{Math.min(offset + limit, total)} trong tổng
+            số {total} tuyến
           </div>
           <div className="flex gap-2">
             <Button
@@ -357,94 +652,20 @@ export const AdminRoutesPage = () => {
 
       {stopsRouteId ? (
         <Card title={`Điểm dừng cho tuyến #${stopsRouteId}`}>
-          <div className="space-y-3">
-            {stopsDraft.map((s, idx) => (
-              <div
-                key={idx}
-                className="grid md:grid-cols-[2.2fr_1.2fr_0.6fr_0.6fr] gap-3 items-end"
-              >
-                <label className="block text-sm text-gray-200">
-                  <div className="mb-1 font-medium">Thành phố</div>
-                  <select
-                    className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
-                    value={s.cityId === '' ? '' : String(s.cityId)}
-                    onChange={(e) => {
-                      const value = parseSelectNumber(e.target.value);
-                      setStopsDraft((prev) =>
-                        prev.map((item, i) => (i === idx ? { ...item, cityId: value } : item)),
-                      );
-                    }}
-                  >
-                    <option value="" style={placeholderOptionStyle}>
-                      Chọn
-                    </option>
-                    {cities.map((c) => (
-                      <option key={c.id} value={String(c.id)} style={optionTextStyle}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="block text-sm text-gray-200">
-                  <div className="mb-1 font-medium">Loại</div>
-                  <select
-                    className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
-                    value={s.type}
-                    onChange={(e) =>
-                      setStopsDraft((prev) =>
-                        prev.map((item, i) =>
-                          i === idx ? { ...item, type: e.target.value as StopDraft['type'] } : item,
-                        ),
-                      )
-                    }
-                  >
-                    <option value="PICKUP" style={optionTextStyle}>
-                      Đón
-                    </option>
-                    <option value="DROPOFF" style={optionTextStyle}>
-                      Trả
-                    </option>
-                  </select>
-                </label>
-
-                <FormField
-                  label="Thứ tự"
-                  type="number"
-                  value={s.order}
-                  className="w-full"
-                  onChange={(e) =>
-                    setStopsDraft((prev) =>
-                      prev.map((item, i) =>
-                        i === idx ? { ...item, order: Number(e.target.value) } : item,
-                      ),
-                    )
-                  }
-                />
-
-                <FormField
-                  label="Offset (phút)"
-                  type="number"
-                  value={s.estimatedOffsetMinutes}
-                  className="w-full"
-                  onChange={(e) =>
-                    setStopsDraft((prev) =>
-                      prev.map((item, i) =>
-                        i === idx
-                          ? { ...item, estimatedOffsetMinutes: Number(e.target.value) }
-                          : item,
-                      ),
-                    )
-                  }
-                />
-              </div>
-            ))}
+          <div className="space-y-4">
+            {renderStopRows(
+              stopsDraft,
+              setStopsDraft,
+              'Chưa có điểm dừng nào cho tuyến này.',
+            )}
 
             <div className="flex gap-2">
               <Button variant="secondary" onClick={addStopRow}>
                 Thêm điểm
               </Button>
-              <Button onClick={saveStops}>Lưu điểm dừng</Button>
+              <Button onClick={saveStops} loading={savingStops}>
+                Lưu điểm dừng
+              </Button>
               <Button
                 variant="ghost"
                 onClick={() => {

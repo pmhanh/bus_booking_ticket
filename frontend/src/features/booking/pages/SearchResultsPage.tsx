@@ -1,21 +1,29 @@
+import { formatTime, formatDate } from '../../../shared/utils/formatDate';
+import {
+  busTypeOptions,
+  busTypeLabel,
+} from '../../../shared/utils/displayLabels';
+import { formatDuration } from '../../../shared/utils/formatDuration';
+import { useErrorNotification } from '../../../shared/providers/useErrorNotification';
+import { amenityLabel } from '../../../shared/utils/displayLabels';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { HomeSearchForm } from '../components/HomeSearchForm';
 import { Card } from '../../../shared/components/ui/Card';
 import { Button } from '../../../shared/components/ui/Button';
-import { searchTrips, type TripSearchParams, type TripSearchResponse } from '../../trip/api/trips';
+import {
+  searchTrips,
+  type TripSearchParams,
+  type TripSearchResponse,
+} from '../../trip/api/trips';
 import type { Trip } from '../../trip/types/trip';
 import { RangeSlider } from '../../../shared/components/ui/RangeSlider';
+import { TripFare } from '../../trip/components/TripFare';
 
-const BUS_TYPES: { value: string; label: string }[] = [
-  { value: 'SEATER', label: 'Ghế ngồi' },
-  { value: 'SLEEPER', label: 'Giường nằm' },
-  { value: 'LIMOUSINE', label: 'Limousine' },
-  { value: 'VIP', label: 'Xe VIP' },
-];
 const parseSearchParams = (params: URLSearchParams): TripSearchParams => {
-  const toNumber = (value: string | null) => (value ? Number(value) : undefined);
+  const toNumber = (value: string | null) =>
+    value ? Number(value) : undefined;
   return {
     originId: toNumber(params.get('originId')),
     destinationId: toNumber(params.get('destinationId')),
@@ -26,28 +34,11 @@ const parseSearchParams = (params: URLSearchParams): TripSearchParams => {
     maxPrice: toNumber(params.get('maxPrice')),
     busType: params.get('busType') || undefined,
     sortBy: (params.get('sortBy') as TripSearchParams['sortBy']) || 'time',
-    sortOrder: (params.get('sortOrder') as TripSearchParams['sortOrder']) || 'asc',
+    sortOrder:
+      (params.get('sortOrder') as TripSearchParams['sortOrder']) || 'asc',
     page: toNumber(params.get('page')) || 1,
     limit: toNumber(params.get('limit')) || 6,
   };
-};
-
-const formatTime = (date: string) =>
-  new Date(date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-
-const formatDate = (date: string) =>
-  new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-
-const formatDuration = (minutes?: number) => {
-  if (!minutes && minutes !== 0) return '';
-  const hrs = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hrs}h ${mins}m`;
-};
-
-const busTypeLabel = (type?: string) => {
-  const found = BUS_TYPES.find((b) => b.value.toLowerCase() === (type || '').toLowerCase());
-  return found?.label || 'Tiêu chuẩn';
 };
 
 const toMinutes = (time?: string) => {
@@ -70,14 +61,20 @@ const toTimeString = (minutes: number) => {
 
 export const SearchResultsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const filters = useMemo(() => parseSearchParams(searchParams), [searchParams]);
+  const filters = useMemo(
+    () => parseSearchParams(searchParams),
+    [searchParams],
+  );
   const originNameParam = searchParams.get('originName') || undefined;
   const destinationNameParam = searchParams.get('destinationName') || undefined;
   const [result, setResult] = useState<TripSearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useErrorNotification();
 
-  const updateParam = (key: string, value: string | number | string[] | undefined | null) => {
+  const updateParam = (
+    key: string,
+    value: string | number | string[] | undefined | null,
+  ) => {
     const next = new URLSearchParams(searchParams);
     next.delete(key);
     if (Array.isArray(value)) {
@@ -100,28 +97,41 @@ export const SearchResultsPage = () => {
     setError(null);
     searchTrips(filters)
       .then(setResult)
-      .catch((err) => setError(err.message || 'Unable to search trips'))
+      .catch((err) => setError(err.message || 'Không thể tìm kiếm chuyến xe'))
       .finally(() => setLoading(false));
-  }, [filters]);
+  }, [filters, setError]);
 
   const prefill = useMemo(() => {
     const trip = result?.data?.[0];
     const originName = originNameParam || trip?.route.originCity.name;
-    const destinationName = destinationNameParam || trip?.route.destinationCity.name;
+    const destinationName =
+      destinationNameParam || trip?.route.destinationCity.name;
     return {
       origin:
-        filters.originId && originName ? { id: filters.originId, name: originName } : trip
-          ? { id: trip.route.originCity.id, name: trip.route.originCity.name }
-          : undefined,
+        filters.originId && originName
+          ? { id: filters.originId, name: originName }
+          : trip
+            ? { id: trip.route.originCity.id, name: trip.route.originCity.name }
+            : undefined,
       destination:
         filters.destinationId && destinationName
           ? { id: filters.destinationId, name: destinationName }
           : trip
-            ? { id: trip.route.destinationCity.id, name: trip.route.destinationCity.name }
+            ? {
+                id: trip.route.destinationCity.id,
+                name: trip.route.destinationCity.name,
+              }
             : undefined,
       date: filters.date,
     };
-  }, [result, filters.originId, filters.destinationId, filters.date, originNameParam, destinationNameParam]);
+  }, [
+    result,
+    filters.originId,
+    filters.destinationId,
+    filters.date,
+    originNameParam,
+    destinationNameParam,
+  ]);
 
   const startMinutes = toMinutes(filters.startTime) ?? 0;
   const endMinutes = toMinutes(filters.endTime) ?? 1440;
@@ -142,8 +152,15 @@ export const SearchResultsPage = () => {
             </h1>
             {prefill.origin && prefill.destination && prefill.date ? (
               <div className="text-sm text-emerald-100">
-                Đang tìm: <span className="font-semibold text-white">{prefill.origin.name}</span> →{' '}
-                <span className="font-semibold text-white">{prefill.destination.name}</span> ·{' '}
+                Đang tìm:{' '}
+                <span className="font-semibold text-white">
+                  {prefill.origin.name}
+                </span>{' '}
+                →{' '}
+                <span className="font-semibold text-white">
+                  {prefill.destination.name}
+                </span>{' '}
+                ·{' '}
                 <span className="font-semibold text-white">{prefill.date}</span>
               </div>
             ) : null}
@@ -171,7 +188,7 @@ export const SearchResultsPage = () => {
       </section>
 
       <div className="relative z-10 grid lg:grid-cols-[320px_1fr] gap-4">
-        <Card title="Filters" className="h-fit sticky top-24">
+        <Card title="Bộ lọc" className="h-fit sticky top-24">
           <div className="space-y-6 text-sm text-gray-100">
             <div>
               <div className="flex items-center justify-between text-xs uppercase text-gray-400 mb-2">
@@ -237,8 +254,8 @@ export const SearchResultsPage = () => {
                 />
 
                 <div className="flex items-center justify-between text-xs text-gray-300">
-                  <span>Từ: {minPrice.toLocaleString()} đ</span>
-                  <span>Đến: {maxPrice.toLocaleString()} đ</span>
+                  <span>Từ: {minPrice.toLocaleString('vi-VN')} đ</span>
+                  <span>Đến: {maxPrice.toLocaleString('vi-VN')} đ</span>
                 </div>
               </div>
             </div>
@@ -246,7 +263,7 @@ export const SearchResultsPage = () => {
             <div className="space-y-2">
               <div className="text-xs uppercase text-gray-400">Loại xe</div>
               <div className="flex flex-wrap gap-2">
-                {BUS_TYPES.map((type) => {
+                {busTypeOptions.map((type) => {
                   const active = filters.busType === type.value;
                   return (
                     <button
@@ -257,7 +274,9 @@ export const SearchResultsPage = () => {
                           ? 'bg-emerald-500/10 border-emerald-400/80 text-emerald-100'
                           : 'border-white/10 text-white hover:border-white/30',
                       )}
-                      onClick={() => updateParam('busType', active ? undefined : type.value)}
+                      onClick={() =>
+                        updateParam('busType', active ? undefined : type.value)
+                      }
                     >
                       {type.label}
                     </button>
@@ -265,7 +284,6 @@ export const SearchResultsPage = () => {
                 })}
               </div>
             </div>
-
           </div>
         </Card>
 
@@ -274,8 +292,13 @@ export const SearchResultsPage = () => {
             <div className="text-sm text-gray-300">
               {filters.date ? (
                 <>
-                  Chuyến ngày <span className="text-white font-semibold">{filters.date}</span>
-                  {filters.originId && filters.destinationId ? ' · cập nhật thời gian thực' : null}
+                  Chuyến ngày{' '}
+                  <span className="text-white font-semibold">
+                    {filters.date}
+                  </span>
+                  {filters.originId && filters.destinationId
+                    ? ' · cập nhật thời gian thực'
+                    : null}
                 </>
               ) : (
                 'Chọn điểm đi, điểm đến và ngày để xem chuyến'
@@ -293,7 +316,12 @@ export const SearchResultsPage = () => {
               </select>
               <Button
                 variant="secondary"
-                onClick={() => updateParam('sortOrder', filters.sortOrder === 'desc' ? 'asc' : 'desc')}
+                onClick={() =>
+                  updateParam(
+                    'sortOrder',
+                    filters.sortOrder === 'desc' ? 'asc' : 'desc',
+                  )
+                }
               >
                 {filters.sortOrder === 'desc' ? 'Giảm dần' : 'Tăng dần'}
               </Button>
@@ -310,36 +338,46 @@ export const SearchResultsPage = () => {
             </Card>
           ) : null}
 
-          {error ? <Card className="text-red-200 text-sm">{error}</Card> : null}
-
           {!loading && !error && result?.data?.length
-            ? result.data.map((trip) => <TripCard key={trip.id} trip={trip} filters={filters} />):null}
+            ? result.data.map((trip) => (
+                <TripCard key={trip.id} trip={trip} filters={filters} />
+              ))
+            : null}
 
           {!loading && !error && result && result.data?.length === 0 ? (
             <Card className="text-center text-gray-300 text-sm">
-              Chưa có chuyến đi phù hợp. Thay đổi khoảng thời gian hoặc đổi ngày.
+              Chưa có chuyến đi phù hợp. Thay đổi khoảng thời gian hoặc đổi
+              ngày.
             </Card>
           ) : null}
 
           {result && result.totalPages > 1 ? (
             <div className="flex items-center justify-between border border-white/10 rounded-2xl px-4 py-3">
               <div className="text-sm text-gray-300">
-                Trang {result.page} / {result.totalPages} · {result.total} chuyến
+                Trang {result.page} / {result.totalPages} · {result.total}{' '}
+                chuyến
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="secondary"
                   disabled={result.page <= 1}
-                  onClick={() => updateParam('page', Math.max(1, (result.page || 1) - 1))}
+                  onClick={() =>
+                    updateParam('page', Math.max(1, (result.page || 1) - 1))
+                  }
                 >
-                  Prev
+                  Trước
                 </Button>
                 <Button
                   variant="secondary"
                   disabled={result.page >= result.totalPages}
-                  onClick={() => updateParam('page', Math.min(result.totalPages, (result.page || 1) + 1))}
+                  onClick={() =>
+                    updateParam(
+                      'page',
+                      Math.min(result.totalPages, (result.page || 1) + 1),
+                    )
+                  }
                 >
-                  Next
+                  Tiếp
                 </Button>
               </div>
             </div>
@@ -350,7 +388,13 @@ export const SearchResultsPage = () => {
   );
 };
 
-const TripCard = ({ trip, filters }: { trip: Trip; filters: TripSearchParams }) => {
+const TripCard = ({
+  trip,
+  filters,
+}: {
+  trip: Trip;
+  filters: TripSearchParams;
+}) => {
   const duration = formatDuration(trip.durationMinutes);
   const detailState = {
     originId: filters.originId ?? trip.route.originCity.id,
@@ -374,46 +418,72 @@ const TripCard = ({ trip, filters }: { trip: Trip; filters: TripSearchParams }) 
       <div className="grid md:grid-cols-[1fr_auto] gap-4 items-center">
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm text-gray-300">
-            <span className="font-semibold text-white">{trip.route.originCity.name}</span>
+            <span className="font-semibold text-white">
+              {trip.route.originCity.name}
+            </span>
             <span className="text-gray-500">{'->'}</span>
-            <span className="font-semibold text-white">{trip.route.destinationCity.name}</span>
-            {duration ? <span className="px-2 py-1 rounded-full bg-white/10 text-xs">{duration}</span> : null}
+            <span className="font-semibold text-white">
+              {trip.route.destinationCity.name}
+            </span>
+            {duration ? (
+              <span className="px-2 py-1 rounded-full bg-white/10 text-xs">
+                {duration}
+              </span>
+            ) : null}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm text-gray-100">
             <div>
               <div className="text-xs text-gray-400 uppercase">Giờ đi</div>
-              <div className="text-lg font-semibold text-white">{formatTime(trip.departureTime)}</div>
-              <div className="text-xs text-gray-400">{formatDate(trip.departureTime)}</div>
+              <div className="text-lg font-semibold text-white">
+                {formatTime(trip.departureTime, 'Asia/Ho_Chi_Minh')}
+              </div>
+              <div className="text-xs text-gray-400">
+                {formatDate(trip.departureTime, 'Asia/Ho_Chi_Minh')}
+              </div>
             </div>
             <div>
               <div className="text-xs text-gray-400 uppercase">Giờ đến</div>
-              <div className="text-lg font-semibold text-white">{formatTime(trip.arrivalTime)}</div>
-              <div className="text-xs text-gray-400">{formatDate(trip.arrivalTime)}</div>
+              <div className="text-lg font-semibold text-white">
+                {formatTime(trip.arrivalTime, 'Asia/Ho_Chi_Minh')}
+              </div>
+              <div className="text-xs text-gray-400">
+                {formatDate(trip.arrivalTime, 'Asia/Ho_Chi_Minh')}
+              </div>
             </div>
             <div>
               <div className="text-xs text-gray-400 uppercase">Xe</div>
-              <div className="text-lg font-semibold text-white">{trip.bus.name}</div>
+              <div className="text-lg font-semibold text-white">
+                {trip.bus.name}
+              </div>
               <div className="text-xs text-gray-400">
-                {busTypeLabel(trip.bus.busType)} · {trip.bus.seatMap?.name || 'Chưa có sơ đồ ghế'}
+                {busTypeLabel(trip.bus.busType)} ·{' '}
+                {trip.bus.seatMap?.name || 'Chưa có sơ đồ ghế'}
               </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 text-xs text-gray-100">
             {(trip.bus.amenities || []).slice(0, 6).map((a) => (
-              <span key={a} className="px-3 py-1 rounded-full bg-white/10 border border-white/10">
-                {a}
+              <span
+                key={amenityLabel(a)}
+                className="px-3 py-1 rounded-full bg-white/10 border border-white/10"
+              >
+                {amenityLabel(a)}
               </span>
             ))}
             {!trip.bus.amenities?.length ? (
-              <span className="text-gray-400">No amenity data</span>
+              <span className="text-gray-400">Chưa có thông tin tiện ích</span>
             ) : null}
           </div>
         </div>
         <div className="flex flex-col items-end gap-3">
-
+          <TripFare price={trip.basePrice} />
           <div className="flex gap-2">
             <Link
-              to={detailQuery.toString() ? `/trips/${trip.id}?${detailQuery.toString()}` : `/trips/${trip.id}`}
+              to={
+                detailQuery.toString()
+                  ? `/trips/${trip.id}?${detailQuery.toString()}`
+                  : `/trips/${trip.id}`
+              }
               state={{ search: detailState }}
             >
               <Button variant="secondary" className="px-4">

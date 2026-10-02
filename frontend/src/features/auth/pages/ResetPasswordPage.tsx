@@ -1,11 +1,12 @@
+import { getErrorMessage } from '../../../shared/utils/errorMessage';
 import type { FormEvent } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../../../shared/components/ui/Button';
 import { Card } from '../../../shared/components/ui/Card';
 import { FormField } from '../../../shared/components/ui/FormField';
 import { useToast } from '../../../shared/providers/ToastProvider';
-import { usePasswordValidation } from '../hooks/usePasswordValidation';
+import { validatePassword, validateConfirm } from '../utils/passwordValidation';
 import { apiClient } from '../../../shared/api/api';
 
 type FieldErrors = { token?: string; password?: string; confirm?: string };
@@ -14,7 +15,6 @@ export const ResetPasswordPage = () => {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { showMessage } = useToast();
-  const { validatePassword, validateConfirm } = usePasswordValidation();
 
   const [token, setToken] = useState(params.get('token') || '');
   const [password, setPassword] = useState('');
@@ -41,7 +41,7 @@ export const ResetPasswordPage = () => {
     return errors;
   };
 
-  const isValid = useMemo(() => Object.keys(validate(token, password, confirm)).length === 0, [token, password, confirm]);
+  const isValid = Object.keys(validate(token, password, confirm)).length === 0;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -55,7 +55,7 @@ export const ResetPasswordPage = () => {
 
       await apiClient('/auth/reset', {
         method: 'POST',
-        body: JSON.stringify({ token: token.trim(), newPassword: password }),
+        body: { token: token.trim(), newPassword: password },
       });
 
       showMessage({
@@ -66,10 +66,10 @@ export const ResetPasswordPage = () => {
 
       setTimeout(() => navigate('/login'), 1200);
     } catch (err) {
-      const msg =
-        (err as any)?.response?.data?.message ||
-        (err as any)?.message ||
-        'Không thể đặt lại mật khẩu, vui lòng thử lại';
+      const msg = getErrorMessage(
+        err,
+        'Không thể đặt lại mật khẩu, vui lòng thử lại',
+      );
 
       showMessage({ type: 'error', title: 'Thất bại', message: msg });
     } finally {
@@ -99,7 +99,7 @@ export const ResetPasswordPage = () => {
               }}
               required
               error={fieldErrors.token}
-              placeholder="Dán mã trong email (token)"
+              placeholder="Dán mã đặt lại trong email"
             />
           ) : null}
 
@@ -121,7 +121,10 @@ export const ResetPasswordPage = () => {
             }}
             onBlur={() => {
               const errors = validate(token, password, confirm);
-              setFieldErrors((prev) => ({ ...prev, password: errors.password }));
+              setFieldErrors((prev) => ({
+                ...prev,
+                password: errors.password,
+              }));
             }}
             required
             error={fieldErrors.password}
@@ -148,7 +151,11 @@ export const ResetPasswordPage = () => {
             error={fieldErrors.confirm}
           />
 
-          <Button type="submit" className="w-full" disabled={!isValid || saving}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!isValid || saving}
+          >
             {saving ? 'Đang đặt lại...' : 'Đặt lại mật khẩu'}
           </Button>
         </form>

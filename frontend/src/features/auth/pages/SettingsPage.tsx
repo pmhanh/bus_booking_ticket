@@ -1,11 +1,12 @@
+import { getErrorMessage } from '../../../shared/utils/errorMessage';
 import type { FormEvent } from 'react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '../../../shared/components/ui/Button';
 import { Card } from '../../../shared/components/ui/Card';
 import { FormField } from '../../../shared/components/ui/FormField';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../../../shared/providers/ToastProvider';
-import { usePasswordValidation } from '../hooks/usePasswordValidation';
+import { validatePassword, validateConfirm } from '../utils/passwordValidation';
 import { apiClient } from '../../../shared/api/api';
 
 type PasswordForm = {
@@ -23,7 +24,6 @@ type FieldErrors = {
 export const SettingsPage = () => {
   const { accessToken } = useAuth();
   const { showMessage } = useToast();
-  const { validatePassword, validateConfirm } = usePasswordValidation();
 
   const [pw, setPw] = useState<PasswordForm>({
     current: '',
@@ -55,7 +55,7 @@ export const SettingsPage = () => {
     return errors;
   };
 
-  const isValid = useMemo(() => Object.keys(validate(pw)).length === 0, [pw]);
+  const isValid = Object.keys(validate(pw)).length === 0;
 
   const changePassword = async (e: FormEvent) => {
     e.preventDefault();
@@ -77,11 +77,10 @@ export const SettingsPage = () => {
 
       await apiClient('/auth/change-password', {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           currentPassword: pw.current,
           newPassword: pw.next,
-        }),
-        headers: { Authorization: `Bearer ${accessToken}` },
+        },
       });
 
       showMessage({
@@ -93,10 +92,10 @@ export const SettingsPage = () => {
       setPw({ current: '', next: '', confirm: '' });
       setFieldErrors({});
     } catch (err) {
-      const msg =
-        (err as any)?.response?.data?.message ||
-        (err as any)?.message ||
-        'Đổi mật khẩu thất bại, vui lòng thử lại';
+      const msg = getErrorMessage(
+        err,
+        'Đổi mật khẩu thất bại, vui lòng thử lại',
+      );
 
       showMessage({ type: 'error', title: 'Lỗi', message: msg });
     } finally {
@@ -171,7 +170,11 @@ export const SettingsPage = () => {
             error={fieldErrors.confirm}
           />
 
-          <Button type="submit" className="w-full" disabled={!isValid || saving}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!isValid || saving}
+          >
             {saving ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
           </Button>
         </form>

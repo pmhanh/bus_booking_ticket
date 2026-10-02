@@ -25,7 +25,9 @@ export type TripSearchResponse = {
   totalPages: number;
 };
 
-export async function searchTrips(params: TripSearchParams): Promise<TripSearchResponse> {
+export async function searchTrips(
+  params: TripSearchParams,
+): Promise<TripSearchResponse> {
   const qs = new URLSearchParams();
   const append = (key: string, value?: string | number | null) => {
     if (value === undefined || value === null || value === '') return;
@@ -46,7 +48,9 @@ export async function searchTrips(params: TripSearchParams): Promise<TripSearchR
   append('limit', params.limit);
   params.amenities?.forEach((a) => qs.append('amenities', a));
 
-  return apiClient<TripSearchResponse>(`/trips/search?${qs.toString()}`, { method: 'GET' });
+  return apiClient<TripSearchResponse>(`/trips/search?${qs.toString()}`, {
+    method: 'GET',
+  });
 }
 
 export async function getTripById(id: number) {

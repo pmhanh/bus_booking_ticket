@@ -1,8 +1,14 @@
 import type { Trip } from '../../trip/types/trip';
 
-export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'EXPIRED';
+import type { BookingStatus } from '../../booking/types/booking';
+export type { BookingStatus } from '../../booking/types/booking';
 
-export type PaymentStatus = 'INIT' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED';
+export type PaymentStatus =
+  | 'INIT'
+  | 'PENDING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'REFUNDED';
 
 export type BookingDetail = {
   id: number;
@@ -25,15 +31,23 @@ export type Payment = {
   status: PaymentStatus;
   amount: number;
   refundAmount?: number;
+  pendingRefund?: {
+    requestId: string;
+    amount: number;
+    reason: string;
+    method: 'MANUAL' | 'GATEWAY';
+    status: 'PENDING' | 'FAILED';
+    error?: string;
+  } | null;
   refundReason?: string;
   refundMethod?: 'MANUAL' | 'GATEWAY';
-  refundedAt?: string;
+  refundedAt?: string | null;
   createdAt: string;
 };
 
 export type Booking = {
   id: string;
-  reference: string;
+  reference?: string | null;
   trip: Trip;
   contactName: string;
   contactEmail: string;

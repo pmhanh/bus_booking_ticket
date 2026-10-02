@@ -1,6 +1,6 @@
+import { useToast } from '../../../shared/providers/ToastProvider';
 import { useState } from 'react';
 import { Button } from '../../../shared/components/ui/Button';
-import { FormField } from '../../../shared/components/ui/FormField';
 import { apiClient } from '../../../shared/api/api';
 import type { Booking } from '../types/booking';
 
@@ -8,47 +8,44 @@ type Props = {
   booking: Booking;
   onClose: () => void;
   onSuccess: () => void;
-  accessToken: string;
 };
 
-export const RefundModal = ({
-  booking,
-  onClose,
-  onSuccess,
-  accessToken,
-}: Props) => {
-  const [amount, setAmount] = useState(booking.totalPrice);
-  const [reason, setReason] = useState('');
-  const [method, setMethod] = useState<'MANUAL' | 'GATEWAY'>('MANUAL');
+export const RefundModal = ({ booking, onClose, onSuccess }: Props) => {
+  const { showError } = useToast();
+  const remaining =
+    (booking.payment?.amount ?? booking.totalPrice) -
+    (booking.payment?.refundAmount ?? 0);
+  const pending =
+    booking.payment?.pendingRefund?.status === 'PENDING'
+      ? booking.payment.pendingRefund
+      : null;
+  const [requestId] = useState(() => pending?.requestId ?? crypto.randomUUID());
+
+  const [reason, setReason] = useState(pending?.reason ?? '');
+  const [method, setMethod] = useState<'MANUAL' | 'GATEWAY'>(
+    pending?.method ?? 'GATEWAY',
+  );
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
 
     if (!reason.trim()) {
-      setError('Vui lòng nhập lý do hoàn tiền');
-      return;
-    }
-
-    if (amount <= 0 || amount > booking.totalPrice) {
-      setError('Số tiền hoàn không hợp lệ');
+      showError('Vui lòng nhập lý do hoàn tiền');
       return;
     }
 
     setLoading(true);
 
     try {
-      await apiClient(`/admin/bookings/${booking.reference}/refund`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: { amount, reason, method },
-      });
+      await apiClient(
+        `/admin/bookings/${booking.reference ?? booking.id}/refund`,
+        { method: 'POST', body: { requestId, reason, method } },
+      );
 
       onSuccess();
     } catch (err) {
-      setError((err as Error).message || 'Không thể xử lý hoàn tiền');
+      showError((err as Error).message || 'Không thể xử lý hoàn tiền');
     } finally {
       setLoading(false);
     }
@@ -59,36 +56,31 @@ export const RefundModal = ({
       <div className="w-full max-w-md bg-surface rounded-xl p-6 mx-4">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-white">Xử lý hoàn tiền</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
             ✕
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <div className="text-sm text-gray-400 mb-2">Booking</div>
-            <div className="text-white font-mono">{booking.reference}</div>
+            <div className="text-sm text-gray-400 mb-2">Mã đặt chỗ</div>
+            <div className="text-white font-mono">
+              {booking.reference ?? booking.id}
+            </div>
           </div>
 
           <div>
-            <div className="text-sm text-gray-400 mb-2">Tổng tiền đã thanh toán</div>
+            <div className="text-sm text-gray-400 mb-2">
+              Tổng tiền đã thanh toán
+            </div>
             <div className="text-white font-semibold">
               {booking.totalPrice.toLocaleString('vi-VN')}đ
             </div>
           </div>
 
-          <FormField
-            label="Số tiền hoàn"
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(Number(e.target.value))}
-            min={0}
-            max={booking.totalPrice}
-            required
-          />
+          <p className="text-sm text-gray-300">
+            Hoàn toàn bộ: {remaining.toLocaleString('vi-VN')}đ
+          </p>
 
           <div>
             <label className="block text-sm text-gray-200 mb-2">
@@ -110,18 +102,14 @@ export const RefundModal = ({
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={method}
-              onChange={(e) => setMethod(e.target.value as 'MANUAL' | 'GATEWAY')}
+              onChange={(e) =>
+                setMethod(e.target.value as 'MANUAL' | 'GATEWAY')
+              }
             >
               <option value="MANUAL">Thủ công (chuyển khoản trực tiếp)</option>
               <option value="GATEWAY">Qua cổng thanh toán</option>
             </select>
           </div>
-
-          {error && (
-            <div className="px-3 py-2 rounded-lg bg-error/10 border border-error/30 text-error text-sm">
-              {error}
-            </div>
-          )}
 
           <div className="flex gap-3 pt-4">
             <Button type="submit" disabled={loading}>

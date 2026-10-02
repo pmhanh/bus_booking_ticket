@@ -1,21 +1,30 @@
+import { statusLabel } from '../../../shared/utils/displayLabels';
 import type { Passenger } from '../types/passenger';
 import { CheckInButton } from './CheckInButton';
 import { Card } from '../../../shared/components/ui/Card';
 
 interface PassengerListProps {
   tripId: number;
+  blockedReason?: string | null;
   passengers: Passenger[];
   onRefresh: () => void;
 }
 
-export function PassengerList({ tripId, passengers, onRefresh }: PassengerListProps) {
+export function PassengerList({
+  tripId,
+  passengers,
+  onRefresh,
+  blockedReason,
+}: PassengerListProps) {
   const checkedInCount = passengers.filter((p) => p.isCheckedIn).length;
   const totalCount = passengers.length;
 
   if (passengers.length === 0) {
     return (
       <Card className="p-8 text-center">
-        <p className="text-gray-400">Không có hành khách nào cho chuyến đi này.</p>
+        <p className="text-gray-400">
+          Không có hành khách nào cho chuyến đi này.
+        </p>
       </Card>
     );
   }
@@ -23,12 +32,19 @@ export function PassengerList({ tripId, passengers, onRefresh }: PassengerListPr
   return (
     <Card className="overflow-hidden">
       <div className="p-4 border-b border-white/10">
+        {blockedReason && (
+          <p className="text-amber-300 text-sm mb-3">
+            Không thể cập nhật lên xe: {blockedReason}
+          </p>
+        )}
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold text-white">
             Danh sách hành khách
           </h3>
           <div className="text-sm text-gray-400">
-            Đã check-in: <span className="font-semibold text-primary">{checkedInCount}</span> / {totalCount}
+            Đã lên xe:{' '}
+            <span className="font-semibold text-primary">{checkedInCount}</span>{' '}
+            / {totalCount}
           </div>
         </div>
       </div>
@@ -50,13 +66,13 @@ export function PassengerList({ tripId, passengers, onRefresh }: PassengerListPr
                 CMND/CCCD
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Mã booking
+                Mã đặt chỗ
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Trạng thái booking
+                Trạng thái đặt chỗ
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Check-in
+                Xác nhận lên xe
               </th>
             </tr>
           </thead>
@@ -87,11 +103,11 @@ export function PassengerList({ tripId, passengers, onRefresh }: PassengerListPr
                       passenger.bookingStatus === 'CONFIRMED'
                         ? 'bg-green-600/30 text-green-300'
                         : passenger.bookingStatus === 'PENDING'
-                        ? 'bg-yellow-600/30 text-yellow-300'
-                        : 'bg-gray-600/30 text-gray-400'
+                          ? 'bg-yellow-600/30 text-yellow-300'
+                          : 'bg-gray-600/30 text-gray-400'
                     }`}
                   >
-                    {passenger.bookingStatus}
+                    {statusLabel(passenger.bookingStatus)}
                   </span>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm">
@@ -99,6 +115,7 @@ export function PassengerList({ tripId, passengers, onRefresh }: PassengerListPr
                     tripId={tripId}
                     bookingDetailId={passenger.bookingDetailId}
                     isCheckedIn={passenger.isCheckedIn}
+                    blockedReason={blockedReason}
                     onCheckInSuccess={onRefresh}
                   />
                 </td>

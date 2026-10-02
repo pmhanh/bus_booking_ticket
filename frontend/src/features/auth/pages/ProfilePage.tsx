@@ -4,7 +4,7 @@ import { Button } from '../../../shared/components/ui/Button';
 import { Card } from '../../../shared/components/ui/Card';
 import { FormField } from '../../../shared/components/ui/FormField';
 import { useAuth } from '../context/AuthContext';
-import { api, apiClient } from '../../../shared/api/api';
+import { apiClient } from '../../../shared/api/api';
 import { useToast } from '../../../shared/providers/ToastProvider';
 
 type ProfileForm = {
@@ -18,11 +18,9 @@ type FieldErrors = {
 };
 
 export const ProfilePage = () => {
-  const { user, refresh, accessToken } = useAuth();
+  const { user, reloadProfile, accessToken } = useAuth();
   const { showMessage } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-  const fileBase = apiBase.replace(/\/api$/, '');
 
   const [profile, setProfile] = useState<ProfileForm>({
     fullName: user?.fullName || '',
@@ -52,18 +50,27 @@ export const ProfilePage = () => {
     const phone = next.phone.trim();
     if (phone) {
       const ok = /^(03|05|07|08|09)\d{8}$/.test(phone);
-      if (!ok) errors.phone = 'Số điện thoại không hợp lệ (vd: 0987654321 hoặc +84987654321)';
+      if (!ok)
+        errors.phone =
+          'Số điện thoại không hợp lệ (vd: 0987654321 hoặc +84987654321)';
     }
 
     return errors;
   };
 
-  const isValid = useMemo(() => Object.keys(validate(profile)).length === 0, [profile]);
+  const isValid = useMemo(
+    () => Object.keys(validate(profile)).length === 0,
+    [profile],
+  );
 
   const updateProfile = async (e: FormEvent) => {
     e.preventDefault();
     if (!accessToken) {
-      showMessage({ type: 'error', title: 'Chưa đăng nhập', message: 'Bạn chưa đăng nhập.' });
+      showMessage({
+        type: 'error',
+        title: 'Chưa đăng nhập',
+        message: 'Bạn chưa đăng nhập.',
+      });
       return;
     }
 
@@ -76,20 +83,22 @@ export const ProfilePage = () => {
 
       await apiClient('/users/me/profile', {
         method: 'PUT',
-        body: JSON.stringify({
+        body: {
           fullName: profile.fullName.trim(),
           phone: profile.phone.trim(),
-        }),
-        headers: { Authorization: `Bearer ${accessToken}` },
+        },
       });
 
-      showMessage({ type: 'success', title: 'Thành công', message: 'Cập nhật hồ sơ thành công' });
-      await refresh();
+      showMessage({
+        type: 'success',
+        title: 'Thành công',
+        message: 'Cập nhật hồ sơ thành công',
+      });
+      await reloadProfile();
     } catch (err) {
-      const msg =
-        (err as any)?.response?.data?.message ||
-        (err as any)?.message ||
-        'Cập nhật thất bại, vui lòng thử lại';
+      const msg = err instanceof Error && err.message
+        ? err.message
+        : 'Cập nhật thất bại, vui lòng thử lại';
 
       showMessage({ type: 'error', title: 'Lỗi', message: msg });
     } finally {
@@ -97,31 +106,33 @@ export const ProfilePage = () => {
     }
   };
 
-  const avatarSrc = useMemo(() => {
-    const url = user?.avatarUrl || '';
-    if (!url) return '';
-    if (url.startsWith('http')) return url;
-    return `${fileBase}${url}`;
-  }, [fileBase, user?.avatarUrl]);
+  const avatarSrc = user?.avatarUrl || '';
 
   const handleAvatarUpload = async (file?: File | null) => {
     if (!file) return;
     if (!accessToken) {
-      showMessage({ type: 'error', title: 'Chưa đăng nhập', message: 'Bạn chưa đăng nhập.' });
+      showMessage({
+        type: 'error',
+        title: 'Chưa đăng nhập',
+        message: 'Bạn chưa đăng nhập.',
+      });
       return;
     }
     const form = new FormData();
     form.append('file', file);
     try {
       setUploading(true);
-      await api.post('/users/me/avatar', form, {
-        headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${accessToken}` },
+      await apiClient('/users/me/avatar', { method: 'POST', body: form, timeout: 90000 });
+      showMessage({
+        type: 'success',
+        title: 'Thành công',
+        message: 'Đã cập nhật ảnh đại diện',
       });
-      showMessage({ type: 'success', title: 'Thành công', message: 'Đã cập nhật ảnh đại diện' });
-      await refresh();
+      await reloadProfile();
     } catch (err) {
-      const msg =
-        (err as any)?.response?.data?.message || (err as Error)?.message || 'Tải ảnh thất bại, thử lại.';
+      const msg = err instanceof Error && err.message
+        ? err.message
+        : 'Tải ảnh thất bại, thử lại.';
       showMessage({ type: 'error', title: 'Lỗi', message: msg });
     } finally {
       setUploading(false);
@@ -135,7 +146,11 @@ export const ProfilePage = () => {
         <div className="flex items-center gap-4 mb-4">
           <div className="h-16 w-16 rounded-full bg-white/10 border border-white/10 overflow-hidden grid place-items-center text-white text-lg font-semibold">
             {avatarSrc ? (
-              <img src={avatarSrc} alt="avatar" className="h-full w-full object-cover" />
+              <img
+                src={avatarSrc}
+                alt="Ảnh đại diện"
+                className="h-full w-full object-cover"
+              />
             ) : (
               (user?.fullName?.[0] || user?.email?.[0] || '?').toUpperCase()
             )}
@@ -159,7 +174,12 @@ export const ProfilePage = () => {
           </div>
         </div>
         <form className="space-y-3" onSubmit={updateProfile}>
-          <FormField label="Email" value={user?.email ?? ''} disabled className="opacity-60 cursor-not-allowed" />
+          <FormField
+            label="Email"
+            value={user?.email ?? ''}
+            disabled
+            className="opacity-60 cursor-not-allowed"
+          />
 
           <FormField
             label="Họ tên"
@@ -170,11 +190,17 @@ export const ProfilePage = () => {
               setProfile(next);
 
               const errors = validate(next);
-              setFieldErrors((prev) => ({ ...prev, fullName: errors.fullName }));
+              setFieldErrors((prev) => ({
+                ...prev,
+                fullName: errors.fullName,
+              }));
             }}
             onBlur={() => {
               const errors = validate(profile);
-              setFieldErrors((prev) => ({ ...prev, fullName: errors.fullName }));
+              setFieldErrors((prev) => ({
+                ...prev,
+                fullName: errors.fullName,
+              }));
             }}
             error={fieldErrors.fullName}
           />
@@ -198,7 +224,11 @@ export const ProfilePage = () => {
             placeholder="vd: 0987654321 hoặc +84987654321"
           />
 
-          <Button type="submit" className="w-full" disabled={!isValid || saving}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!isValid || saving}
+          >
             {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
           </Button>
         </form>

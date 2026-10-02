@@ -4,13 +4,14 @@ import clsx from 'clsx';
 type Props = {
   label: string;
   error?: string;
+  wrapperClassName?: string;
 } & InputHTMLAttributes<HTMLInputElement>;
 
-export const FormField = ({ label, error, className, ...rest }: Props) => {
+export const FormField = ({ label, error, className, wrapperClassName, ...rest }: Props) => {
   const hasError = Boolean(error);
 
   return (
-    <label className={clsx('block text-sm mb-3', hasError ? 'text-error' : 'text-gray-200')}>
+    <label className={clsx('block text-sm mb-3', hasError ? 'text-error' : 'text-gray-200', wrapperClassName)}>
       <div className="mb-2 font-medium">{label}</div>
       <input
         className={clsx(

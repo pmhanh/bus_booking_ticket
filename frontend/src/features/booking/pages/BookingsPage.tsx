@@ -6,37 +6,15 @@ import { FormField } from '../../../shared/components/ui/FormField';
 import { useAuth } from '../../auth/context/AuthContext';
 import { useBooking } from '../context/BookingContext';
 import type { Booking } from '../types/booking';
-import { cancelBooking, getMyBookings, lookupBooking, updateBooking } from '../api/bookings';
+import {
+  cancelBooking,
+  getBooking,
+  getMyBookings,
+  lookupBooking,
+} from '../api/bookings';
 import { useToast } from '../../../shared/providers/ToastProvider';
-
-const normalizePassengers = (booking: any) => {
-  const passengers = booking?.passengers;
-  if (Array.isArray(passengers)) return passengers;
-
-  const alt = booking?.passengerInfos;
-  if (Array.isArray(alt)) return alt;
-
-  const tickets = booking?.tickets;
-  if (Array.isArray(tickets)) return tickets;
-
-  const details = booking?.details;
-  if (Array.isArray(details)) {
-    return details.map((d: any) => ({
-      seatCode: d.seatCode ?? d.seatCodeSnapshot ?? d.tripSeat?.seatCodeSnapshot ?? d.tripSeat?.seatCode ?? '',
-      name: d.name ?? d.passengerName ?? '',
-      phone: d.phone ?? d.passengerPhone ?? undefined,
-      idNumber: d.idNumber ?? d.passengerIdNumber ?? undefined,
-      price: Number(d.price ?? d.priceSnapshot ?? d.tripSeat?.price ?? booking?.trip?.basePrice ?? 0),
-    }));
-  }
-
-  return [];
-};
-
-const withPassengers = (booking: any): Booking => ({
-  ...booking,
-  passengers: normalizePassengers(booking),
-});
+import { useErrorNotification } from '../../../shared/providers/useErrorNotification';
+import { BookingPaymentActions } from '../components/BookingPaymentActions';
 
 const canCancelBefore3Hours = (departureTime?: string | Date | null) => {
   if (!departureTime) return false;
@@ -45,171 +23,147 @@ const canCancelBefore3Hours = (departureTime?: string | Date | null) => {
   return dep - Date.now() >= 3 * 60 * 60 * 1000;
 };
 
-
 export const BookingsPage = () => {
   const { user, accessToken } = useAuth();
   const { setContact } = useBooking();
-  const { showMessage } = useToast();
+  const { showMessage, confirm, showError } = useToast();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const [lookupCode, setLookupCode] = useState('');
   const [lookupPhone, setLookupPhone] = useState('');
   const [lookupEmail, setLookupEmail] = useState('');
-  const [lookupResult, setLookupResult] = useState<Booking | null>(null);
-  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [lookupTripDate, setLookupTripDate] = useState('');
+  const [lookupResults, setLookupResults] = useState<Booking[]>([]);
+  const updateListedBooking = (updated: Booking) => {
+    const replace = (items: Booking[]) =>
+      items.map((item) => (item.id === updated.id ? updated : item));
+    setBookings(replace);
+    setLookupResults(replace);
+  };
+  const [lookupError, setLookupError] = useErrorNotification();
   const [lookupFieldError, setLookupFieldError] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
-  const [editing, setEditing] = useState<Booking | null>(null);
-  const [editContact, setEditContact] = useState({ name: '', phone: '', email: '' });
-  const [editPassengers, setEditPassengers] = useState<
-    { seatCode: string; name: string; phone?: string; idNumber?: string; price: number }[]
-  >([]);
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
     setLoading(true);
-    getMyBookings(accessToken)
-      .then((data) => setBookings(data.map(withPassengers)))
-      .catch((err) => setError(err.message || 'Không thể tải danh sách đặt chỗ'))
+    getMyBookings()
+      .then((data) => setBookings(data))
+      .catch((err) =>
+        showError(err.message || 'Không thể tải danh sách đặt chỗ'),
+      )
       .finally(() => setLoading(false));
-  }, [accessToken]);
+  }, [accessToken, showError]);
 
-    const handleCancel = async (id: string) => {
-  const booking =
-    bookings.find((x) => x.id === id) || (lookupResult?.id === id ? lookupResult : null);
+  const handleCancel = async (id: string) => {
+    const booking =
+      bookings.find((x) => x.id === id) ||
+      lookupResults.find((result) => result.id === id);
 
-  if (!booking) {
-    showMessage({ type: 'error', message: 'Không tìm thấy booking để hủy.' });
-    return;
-  }
+    if (!booking) {
+      showMessage({ type: 'error', message: 'Không tìm thấy đặt chỗ để hủy.' });
+      return;
+    }
 
-  const departureTime = booking.trip?.departureTime;
+    const departureTime = booking.trip?.departureTime;
 
-  if (!canCancelBefore3Hours(departureTime)) {
-    showMessage({
-      type: 'error',
-      message: 'Không thể hủy: phải hủy trước giờ khởi hành ít nhất 3 giờ.',
+    if (!canCancelBefore3Hours(departureTime)) {
+      showMessage({
+        type: 'error',
+        message: 'Không thể hủy: phải hủy trước giờ khởi hành ít nhất 3 giờ.',
+      });
+      return;
+    }
+
+    const policy =
+      'Vé đã thanh toán sẽ được hoàn toàn bộ khi hủy trước giờ khởi hành ít nhất 3 giờ.';
+
+    const ok = await confirm({
+      message: `Bạn có chắc muốn hủy đặt chỗ ${booking.reference || booking.id}?\n\n${policy}`,
+      danger: true,
     });
-    return;
-  }
+    if (!ok) return;
 
-  const policy =
-    'Chính sách hoàn tiền: tùy nhà xe/cổng thanh toán. Tiền (nếu có) sẽ được xử lý theo quy định.';
+    try {
+      // guest cancel: nếu không có accessToken thì gửi contact để verify (backend của bạn có assertAccess)
+      const contact = !accessToken
+        ? {
+            phone: booking.contactPhone || lookupPhone || undefined,
+            email: booking.contactEmail || lookupEmail || undefined,
+          }
+        : undefined;
 
-  const ok = window.confirm(
-    `Bạn chắc muốn HỦY booking ${booking.reference || booking.id}?\n\n${policy}`,
-  );
-  if (!ok) return;
+      const updated = await cancelBooking(id, contact);
 
-  try {
-    showMessage({ type: 'info', message: `Đang hủy booking... ${policy}` });
+      // Update list (ưu tiên data trả về từ backend nếu có)
+      updateListedBooking(updated);
 
-    // guest cancel: nếu không có accessToken thì gửi contact để verify (backend của bạn có assertAccess)
-    const contact =
-  !accessToken
-    ? { phone: booking.contactPhone || lookupPhone || undefined, email: booking.contactEmail || lookupEmail || undefined }
-    : undefined;
-
-    const updated = await cancelBooking(id, accessToken, contact);
-
-    // Update list (ưu tiên data trả về từ backend nếu có)
-    setBookings((prev) =>
-      prev.map((b) => (b.id === id ? withPassengers(updated) : b)),
-    );
-
-    if (lookupResult?.id === id) setLookupResult(withPassengers(updated));
-
-    // nếu đang mở editor của booking này thì đóng luôn
-    if (editing?.id === id) setEditing(null);
-
-    showMessage({
-      type: 'success',
-      message: `Đã hủy booking ${booking.reference || booking.id}. ${policy}`,
-    });
-  } catch (e) {
-    showMessage({
-      type: 'error',
-      message: (e as Error)?.message || 'Hủy booking thất bại.',
-    });
-  }
-};
-
-
+      showMessage({
+        type: 'success',
+        message: updated.refundPending
+          ? 'Đã hủy vé. Yêu cầu hoàn tiền đã được lưu và đang chờ xử lý.'
+          : `Đã hủy đặt chỗ ${booking.reference || booking.id}. ${policy}`,
+      });
+    } catch (e) {
+      showMessage({
+        type: 'error',
+        message: (e as Error)?.message || 'Hủy đặt chỗ thất bại.',
+      });
+    }
+  };
 
   const handleLookup = async () => {
     if (!lookupCode && !lookupPhone && !lookupEmail) {
-      setLookupError('Nhập mã đặt chỗ, email hoặc số điện thoại để tra cứu.');
+      setLookupError('Nhập mã đặt chỗ hoặc thông tin liên hệ để tra cứu.');
+      setLookupFieldError(true);
+      return;
+    }
+    if (lookupCode && !lookupPhone && !lookupEmail) {
+      setLookupError(
+        'Tra cứu theo mã đặt chỗ cần email hoặc số điện thoại để xác thực.',
+      );
+      setLookupFieldError(true);
+      return;
+    }
+    if (!lookupCode && (!lookupTripDate || (!lookupPhone && !lookupEmail))) {
+      setLookupError(
+        'Tra cứu không dùng mã cần ngày khởi hành và email hoặc số điện thoại.',
+      );
       setLookupFieldError(true);
       return;
     }
     setLookupLoading(true);
     setLookupError(null);
-    setLookupResult(null);
+    setLookupResults([]);
     setLookupFieldError(false);
     try {
-      const booking = withPassengers(await lookupBooking(lookupCode, lookupPhone, lookupEmail));
-      setLookupResult(booking);
-      setContact({ phone: booking.contactPhone, email: booking.contactEmail || undefined });
-      startEdit(booking);
+      const results = lookupCode
+        ? [
+            await getBooking(lookupCode, {
+              phone: lookupPhone || undefined,
+              email: lookupEmail || undefined,
+            }),
+          ]
+        : (
+            await lookupBooking(
+              lookupPhone || undefined,
+              lookupEmail || undefined,
+              lookupTripDate || undefined,
+            )
+          ).data;
+      setLookupResults(results);
+      const firstBooking = results[0];
+      if (firstBooking) {
+        setContact({
+          phone: firstBooking.contactPhone,
+          email: firstBooking.contactEmail || undefined,
+        });
+      }
     } catch (err) {
       setLookupError((err as Error)?.message || 'Không tìm thấy đặt chỗ');
     } finally {
       setLookupLoading(false);
-    }
-  };
-
-  const startEdit = (booking: Booking) => {
-    const passengers = normalizePassengers(booking);
-    setEditing({ ...booking, passengers });
-    setEditContact({ name: booking.contactName, phone: booking.contactPhone, email: booking.contactEmail || '' });
-    setEditPassengers(
-      passengers.map((p) => ({
-        seatCode: p.seatCode,
-        name: p.name,
-        phone: p.phone,
-        idNumber: p.idNumber,
-        price: p.price,
-      })),
-    );
-  };
-
-  const updateEditPassenger = (seatCode: string, data: Partial<{ name: string; phone?: string; idNumber?: string }>) => {
-    setEditPassengers((prev) => prev.map((p) => (p.seatCode === seatCode ? { ...p, ...data } : p)));
-  };
-
-  const saveEdit = async () => {
-    if (!editing) return;
-    setSavingEdit(true);
-    setEditError(null);
-    try {
-      const updated = await updateBooking(
-        editing.id,
-        {
-          contactName: editContact.name,
-          contactPhone: editContact.phone,
-          contactEmail: editContact.email,
-          passengers: editPassengers.map((p) => ({
-            seatCode: p.seatCode,
-            name: p.name,
-            phone: p.phone,
-            idNumber: p.idNumber,
-          })),
-        },
-        accessToken,
-      );
-      setBookings((prev) =>
-        prev.map((b) => (b.id === updated.id ? ({ ...withPassengers(updated), passengers: editPassengers } as Booking) : b)),
-      );
-      if (lookupResult?.id === updated.id) setLookupResult({ ...withPassengers(updated), passengers: editPassengers });
-      setEditing({ ...withPassengers(updated), passengers: editPassengers });
-    } catch (err) {
-      setEditError((err as Error)?.message || 'Không thể lưu thay đổi');
-    } finally {
-      setSavingEdit(false);
     }
   };
 
@@ -226,23 +180,31 @@ export const BookingsPage = () => {
 
       {user ? (
         <Card title="Đặt chỗ của tôi">
-          {loading ? <div className="text-sm text-gray-300">Đang tải...</div> : null}
-          {error ? <div className="text-sm text-red-200">{error}</div> : null}
+          {loading ? (
+            <div className="text-sm text-gray-300">Đang tải...</div>
+          ) : null}
+
           {!loading && !bookings.length ? (
-            <div className="text-sm text-gray-300">Chưa có đặt chỗ nào trong tài khoản.</div>
+            <div className="text-sm text-gray-300">
+              Chưa có đặt chỗ nào trong tài khoản.
+            </div>
           ) : null}
           <div className="space-y-3">
             {bookings.map((b) => (
-              <BookingRow key={b.id} booking={b} onCancel={handleCancel} onEdit={startEdit} />
+              <BookingRow
+                key={b.id}
+                booking={b}
+                onCancel={handleCancel}
+                onUpdated={updateListedBooking}
+              />
             ))}
           </div>
         </Card>
       ) : null}
 
-
       {!user ? (
         <Card title="Tra cứu đặt chỗ">
-          <div className="grid md:grid-cols-3 gap-3">
+          <div className="grid md:grid-cols-4 gap-3">
             <FormField
               label="Mã đặt chỗ"
               value={lookupCode}
@@ -251,7 +213,11 @@ export const BookingsPage = () => {
                 if (lookupFieldError) setLookupFieldError(false);
                 if (lookupError) setLookupError(null);
               }}
-              error={lookupFieldError ? 'Nhập mã đặt chỗ, email hoặc số điện thoại.' : undefined}
+              error={
+                lookupFieldError
+                  ? 'Dùng mã thì phải nhập thêm email hoặc số điện thoại.'
+                  : undefined
+              }
             />
             <FormField
               label="Số điện thoại"
@@ -262,7 +228,11 @@ export const BookingsPage = () => {
                 if (lookupFieldError) setLookupFieldError(false);
                 if (lookupError) setLookupError(null);
               }}
-              error={lookupFieldError ? 'Nhập mã đặt chỗ, email hoặc số điện thoại.' : undefined}
+              error={
+                lookupFieldError
+                  ? 'Nhập thông tin liên hệ kèm mã đặt chỗ hoặc ngày khởi hành.'
+                  : undefined
+              }
             />
             <FormField
               label="Email"
@@ -273,78 +243,46 @@ export const BookingsPage = () => {
                 if (lookupFieldError) setLookupFieldError(false);
                 if (lookupError) setLookupError(null);
               }}
-              error={lookupFieldError ? 'Nhập mã đặt chỗ, email hoặc số điện thoại.' : undefined}
+              error={
+                lookupFieldError
+                  ? 'Nhập thông tin liên hệ kèm mã đặt chỗ hoặc ngày khởi hành.'
+                  : undefined
+              }
+            />
+            <FormField
+              label="Ngày khởi hành"
+              type="date"
+              value={lookupTripDate}
+              onChange={(e) => {
+                setLookupTripDate(e.target.value);
+                if (lookupFieldError) setLookupFieldError(false);
+                if (lookupError) setLookupError(null);
+              }}
+              error={
+                lookupFieldError
+                  ? 'Không dùng mã thì phải nhập ngày khởi hành.'
+                  : undefined
+              }
             />
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={handleLookup} disabled={lookupLoading}>
               {lookupLoading ? 'Đang tải...' : 'Tra cứu đặt chỗ'}
             </Button>
-            {lookupError ? <span className="text-sm text-red-200">{lookupError}</span> : null}
           </div>
 
-          {lookupResult ? (
-            <div className="mt-4">
-              <BookingRow booking={lookupResult} onCancel={handleCancel} onEdit={startEdit} />
+          {lookupResults.length ? (
+            <div className="mt-4 space-y-3">
+              {lookupResults.map((booking) => (
+                <BookingRow
+                  key={booking.id}
+                  booking={booking}
+                  onCancel={handleCancel}
+                  onUpdated={updateListedBooking}
+                />
+              ))}
             </div>
           ) : null}
-        </Card>
-      ) : null}
-
-
-
-
-      {editing ? (
-        <Card title={`Chỉnh sửa đặt chỗ ${editing.reference || editing.id}`}>
-          {editError ? <div className="text-sm text-red-200 mb-2">{editError}</div> : null}
-          <div className="grid md:grid-cols-3 gap-3">
-            <FormField
-              label="Người liên hệ"
-              value={editContact.name}
-              onChange={(e) => setEditContact((prev) => ({ ...prev, name: e.target.value }))}
-            />
-            <FormField
-              label="Số điện thoại"
-              value={editContact.phone}
-              onChange={(e) => setEditContact((prev) => ({ ...prev, phone: e.target.value }))}
-            />
-            <FormField
-              label="Email"
-              value={editContact.email}
-              onChange={(e) => setEditContact((prev) => ({ ...prev, email: e.target.value }))}
-            />
-          </div>
-          <div className="space-y-3 mt-3">
-            {editPassengers.map((p) => (
-              <div key={p.seatCode} className="grid md:grid-cols-4 gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="text-sm text-white font-semibold md:col-span-4">Ghế {p.seatCode}</div>
-                <FormField
-                  label="Họ tên"
-                  value={p.name}
-                  onChange={(e) => updateEditPassenger(p.seatCode, { name: e.target.value })}
-                  className="md:col-span-2"
-                />
-                <FormField
-                  label="SĐT"
-                  value={p.phone || ''}
-                  onChange={(e) => updateEditPassenger(p.seatCode, { phone: e.target.value })}
-                />
-                <FormField
-                  label="ID"
-                  value={p.idNumber || ''}
-                  onChange={(e) => updateEditPassenger(p.seatCode, { idNumber: e.target.value })}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex gap-2">
-            <Button onClick={saveEdit} disabled={savingEdit}>
-              {savingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}
-            </Button>
-            <Button variant="ghost" onClick={() => setEditing(null)}>
-              Đóng
-            </Button>
-          </div>
         </Card>
       ) : null}
     </div>
@@ -354,35 +292,49 @@ export const BookingsPage = () => {
 const BookingRow = ({
   booking,
   onCancel,
+  onUpdated,
 }: {
   booking: Booking;
   onCancel: (id: string) => void;
-  onEdit?: (booking: Booking) => void;
+  onUpdated: (booking: Booking) => void;
 }) => {
-  const bookingWithPassengers = withPassengers(booking);
-  const seatCodes = bookingWithPassengers.passengers.map((p) => p.seatCode).filter(Boolean);
+  const seatCodes = booking.passengers.map((p) => p.seatCode).filter(Boolean);
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
       <div className="space-y-1">
         <div className="flex items-center gap-2 text-white font-semibold">
-          <span>{booking.trip?.route?.originCity?.name || 'N/A'}</span>
-          <span className="text-gray-500">{"->"}</span>
-          <span>{booking.trip?.route?.destinationCity?.name || 'N/A'}</span>
+          <span>{booking.trip?.route?.originCity?.name || 'Chưa có'}</span>
+          <span className="text-gray-500">{'->'}</span>
+          <span>{booking.trip?.route?.destinationCity?.name || 'Chưa có'}</span>
         </div>
         <div className="text-xs text-gray-400">
-          {booking.trip?.departureTime ? new Date(booking.trip.departureTime).toLocaleString() : 'No departure time'} - Ghe: {seatCodes.join(', ')}
+          {booking.trip?.departureTime
+            ? new Date(booking.trip.departureTime).toLocaleString('vi-VN')
+            : 'Chưa có giờ khởi hành'}{' '}
+          - Ghế: {seatCodes.join(', ')}
         </div>
-        <div className="text-xs text-emerald-200">Ma: {booking.reference || booking.id}</div>
+        <div className="text-xs text-emerald-200">
+          Mã: {booking.reference || booking.id}
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <Link to={`/bookings/${booking.id}/ticket`} state={{ booking: bookingWithPassengers }}>
-          <Button variant="secondary">Xem vé</Button>
-        </Link>
-        <Button variant="ghost" onClick={() => onCancel(booking.id)} disabled={booking.status === 'CANCELLED'}>
-          {booking.status === 'CANCELLED' ? 'đã hủy' : 'Hủy vé'}
-        </Button>
-        
+      <div className="space-y-2">
+        <BookingPaymentActions booking={booking} onUpdated={onUpdated} />
+        <div className="flex items-center gap-2">
+          <Link
+            to={`/bookings/${booking.id}/ticket`}
+            state={{ booking: booking }}
+          >
+            <Button variant="secondary">
+              {booking.status === 'CONFIRMED' ? 'Xem vé' : 'Xem đơn'}
+            </Button>
+          </Link>
+          {booking.status === 'CONFIRMED' ? (
+            <Button variant="ghost" onClick={() => onCancel(booking.id)}>
+              Hủy vé
+            </Button>
+          ) : null}
+        </div>
       </div>
     </div>
   );

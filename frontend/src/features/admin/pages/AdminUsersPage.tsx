@@ -1,37 +1,53 @@
-import { useEffect, useState } from "react";
-import { Card } from "../../../shared/components/ui/Card";
-import { Button } from "../../../shared/components/ui/Button";
-import { FormField } from "../../../shared/components/ui/FormField";
-import { apiClient } from "../../../shared/api/api";
-import { useAuth } from "../../auth/context/AuthContext";
-import type { User } from "../../auth/types/user";
+import { roleLabel } from '../../../shared/utils/displayLabels';
+import { useEffect, useState } from 'react';
+import { Card } from '../../../shared/components/ui/Card';
+import { Button } from '../../../shared/components/ui/Button';
+import { FormField } from '../../../shared/components/ui/FormField';
+import { apiClient } from '../../../shared/api/api';
+import { useAuth } from '../../auth/context/AuthContext';
+import type { User } from '../../auth/types/user';
+import { useToast } from '../../../shared/providers/ToastProvider';
 
 export const AdminUsersPage = () => {
+  const { showError, showSuccess, confirm } = useToast();
   const { accessToken } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const [filters, setFilters] = useState({ search: "", role: "", status: "" });
+  const [filters, setFilters] = useState({ search: '', role: '', status: '' });
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [selectedRole, setSelectedRole] = useState<string>("");
+  const [selectedRole, setSelectedRole] = useState<string>('');
 
   useEffect(() => {
     if (!accessToken) return;
     const params = new URLSearchParams();
-    if (filters.role) params.append("role", filters.role);
-    if (filters.status) params.append("status", filters.status);
-    if (filters.search) params.append("search", filters.search);
-    apiClient<User[]>(`/admin/users?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }).then(setUsers);
-  }, [accessToken, filters]);
+    if (filters.role) params.append('role', filters.role);
+    if (filters.status) params.append('status', filters.status);
+    if (filters.search) params.append('search', filters.search);
+    apiClient<User[]>(`/admin/users?${params.toString()}`)
+      .then(setUsers)
+      .catch((error: Error) => showError(error.message));
+  }, [accessToken, filters, showError]);
 
   const toggleStatus = async (user: User) => {
-    const nextStatus = user.status === "banned" ? "active" : "banned";
-    await apiClient<User>(`/admin/users/${user.id}/status`, {
-      method: "PATCH",
-      body: { status: nextStatus },
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    setFilters({ ...filters });
+    const nextStatus = user.status === 'banned' ? 'active' : 'banned';
+    if (
+      !(await confirm({
+        message: `Bạn có chắc muốn ${nextStatus === 'banned' ? 'khóa' : 'mở khóa'} tài khoản ${user.email}?`,
+        danger: nextStatus === 'banned',
+      }))
+    )
+      return;
+    try {
+      await apiClient<User>(`/admin/users/${user.id}/status`, {
+        method: 'PATCH',
+        body: { status: nextStatus },
+      });
+      setFilters({ ...filters });
+      showSuccess('Cập nhật trạng thái tài khoản thành công!');
+    } catch (error) {
+      showError(
+        (error as Error).message || 'Không thể cập nhật trạng thái tài khoản.',
+      );
+    }
   };
 
   const startEditRole = (user: User) => {
@@ -41,82 +57,111 @@ export const AdminUsersPage = () => {
 
   const cancelEditRole = () => {
     setEditingUser(null);
-    setSelectedRole("");
+    setSelectedRole('');
   };
 
   const confirmEditRole = async () => {
     if (!editingUser || !selectedRole) return;
 
-    await apiClient<User>(`/admin/users/${editingUser.id}/role`, {
-      method: "PATCH",
-      body: { role: selectedRole },
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    try {
+      await apiClient<User>(`/admin/users/${editingUser.id}/role`, {
+        method: 'PATCH',
+        body: { role: selectedRole },
+      });
 
-    setEditingUser(null);
-    setSelectedRole("");
-    setFilters({ ...filters });
+      setEditingUser(null);
+      setSelectedRole('');
+      setFilters({ ...filters });
+      showSuccess('Cập nhật vai trò thành công!');
+    } catch (error) {
+      showError((error as Error).message || 'Không thể cập nhật vai trò.');
+    }
   };
 
   return (
     <div className="space-y-4 max-w-6xl mx-auto">
       <div className="flex justify-between items-center">
         <div>
-          <p className="text-sm text-gray-400">Admin only</p>
-          <h2 className="text-2xl font-bold text-white">Manage users</h2>
+          <p className="text-sm text-gray-400">Chỉ dành cho quản trị viên</p>
+          <h2 className="text-2xl font-bold text-white">Quản lý người dùng</h2>
         </div>
         <div className="flex gap-2">
           <FormField
-            label="Search"
+            label="Tìm kiếm"
             value={filters.search}
             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
           />
-          <FormField
-            label="Role"
-            value={filters.role}
-            onChange={(e) => setFilters({ ...filters, role: e.target.value })}
-            placeholder="admin/user"
-          />
-          <FormField
-            label="Status"
-            value={filters.status}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-            placeholder="pending/active/banned"
-          />
+          <label className="block text-sm mb-3">
+            <span className="block mb-2">Vai trò</span>
+            <select
+              className="rounded-lg bg-surface border border-white/10 px-3 py-2 text-white"
+              value={filters.role}
+              onChange={(e) => setFilters({ ...filters, role: e.target.value })}
+            >
+              <option value="">Tất cả</option>
+              <option value="user">Người dùng</option>
+              <option value="agent">Nhân viên</option>
+              <option value="admin">Quản trị viên</option>
+            </select>
+          </label>
+          <label className="block text-sm mb-3">
+            <span className="block mb-2">Trạng thái</span>
+            <select
+              className="rounded-lg bg-surface border border-white/10 px-3 py-2 text-white"
+              value={filters.status}
+              onChange={(e) =>
+                setFilters({ ...filters, status: e.target.value })
+              }
+            >
+              <option value="">Tất cả</option>
+              <option value="pending">Chờ xác thực</option>
+              <option value="active">Hoạt động</option>
+              <option value="banned">Đã bị cấm</option>
+            </select>
+          </label>
         </div>
       </div>
       <Card>
         <div className="grid grid-cols-4 gap-3 text-xs uppercase text-gray-400 border-b border-white/5 pb-3">
           <div>Email</div>
-          <div>Full name</div>
-          <div>Role / Status</div>
-          <div className="text-right">Action</div>
+          <div>Họ và tên</div>
+          <div>Vai trò / Trạng thái</div>
+          <div className="text-right">Thao tác</div>
         </div>
         <div className="divide-y divide-white/5">
           {users.map((u) => (
-            <div key={u.id} className="grid grid-cols-4 gap-3 py-3 items-center text-sm">
+            <div
+              key={u.id}
+              className="grid grid-cols-4 gap-3 py-3 items-center text-sm"
+            >
               <div className="font-medium text-white">{u.email}</div>
-              <div>{u.fullName || "-"}</div>
+              <div>{u.fullName || '-'}</div>
               <div>
-                <span className="px-2 py-1 rounded-full bg-white/10 text-xs mr-2">{u.role}</span>
+                <span className="px-2 py-1 rounded-full bg-white/10 text-xs mr-2">
+                  {roleLabel(u.role)}
+                </span>
                 <span
                   className={`px-2 py-1 rounded-full text-xs ${
-                    u.status === "active"
-                      ? "bg-green-600/30 text-green-300"
-                      : u.status === "pending"
-                        ? "bg-yellow-600/30 text-yellow-200"
-                        : "bg-error/30 text-error"
+                    u.status === 'active'
+                      ? 'bg-green-600/30 text-green-300'
+                      : u.status === 'pending'
+                        ? 'bg-yellow-600/30 text-yellow-200'
+                        : 'bg-error/30 text-error'
                   }`}
                 >
-                  {u.status === "active" ? "Active" : u.status === "pending" ? "Pending" : "Banned"}
+                  {u.status === 'active'
+                    ? 'Hoạt động'
+                    : u.status === 'pending'
+                      ? 'Chờ xác thực'
+                      : 'Đã bị cấm'}
                 </span>
               </div>
               <div className="text-right space-x-2">
                 <Button variant="secondary" onClick={() => startEditRole(u)}>
-                  Edit Role
+                  Sửa vai trò
                 </Button>
                 <Button variant="ghost" onClick={() => toggleStatus(u)}>
-                  {u.status === "banned" ? "Activate" : "Ban"}
+                  {u.status === 'banned' ? 'Kích hoạt' : 'Cấm'}
                 </Button>
               </div>
             </div>
@@ -129,41 +174,56 @@ export const AdminUsersPage = () => {
           <Card className="max-w-md w-full mx-4">
             <div className="space-y-4">
               <div>
-                <h3 className="text-xl font-bold text-white">Edit User Role</h3>
+                <h3 className="text-xl font-bold text-white">
+                  Sửa vai trò người dùng
+                </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                  Changing role for: <span className="text-white font-semibold">{editingUser.email}</span>
+                  Đang đổi vai trò cho:{' '}
+                  <span className="text-white font-semibold">
+                    {editingUser.email}
+                  </span>
                 </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Select Role
+                  Chọn vai trò
                 </label>
                 <select
                   value={selectedRole}
                   onChange={(e) => setSelectedRole(e.target.value)}
                   className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white"
                 >
-                  <option value="user" style={{ color: '#111' }}>User</option>
-                  <option value="agent" style={{ color: '#111' }}>Agent</option>
-                  <option value="admin" style={{ color: '#111' }}>Admin</option>
+                  <option value="user" style={{ color: '#111' }}>
+                    Người dùng
+                  </option>
+                  <option value="agent" style={{ color: '#111' }}>
+                    Nhân viên
+                  </option>
+                  <option value="admin" style={{ color: '#111' }}>
+                    Quản trị viên
+                  </option>
                 </select>
               </div>
 
               {selectedRole === 'admin' && (
                 <div className="bg-yellow-600/20 border border-yellow-600/30 rounded-lg p-3">
                   <p className="text-sm text-yellow-200">
-                    ⚠️ Warning: Granting admin role gives full system access.
+                    ⚠️ Cảnh báo: Cấp vai trò quản trị viên sẽ cho phép truy cập
+                    toàn bộ hệ thống.
                   </p>
                 </div>
               )}
 
               <div className="flex gap-2 justify-end">
                 <Button variant="secondary" onClick={cancelEditRole}>
-                  Cancel
+                  Hủy
                 </Button>
-                <Button onClick={confirmEditRole} disabled={!selectedRole || selectedRole === editingUser.role}>
-                  Confirm Change
+                <Button
+                  onClick={confirmEditRole}
+                  disabled={!selectedRole || selectedRole === editingUser.role}
+                >
+                  Xác nhận thay đổi
                 </Button>
               </div>
             </div>

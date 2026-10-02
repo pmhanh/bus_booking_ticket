@@ -1,46 +1,70 @@
-import { createContext, useContext, useState, type PropsWithChildren, useCallback } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type PropsWithChildren,
+} from 'react';
 import { MessagePopup } from '../components/ui/MessagePopup';
-
-type ToastPayload = {
-  type?: 'success' | 'error' | 'info';
-  title?: string;
-  message: string;
-};
+import {
+  createDialogQueue,
+  type MessagePayload,
+  type ConfirmPayload,
+} from './dialogQueue';
 
 type ToastContextValue = {
-  showMessage: (payload: ToastPayload) => void;
+  showMessage: (payload: MessagePayload) => void;
+  showError: (message: string) => void;
+  showSuccess: (message: string) => void;
+  confirm: (payload: ConfirmPayload | string) => Promise<boolean>;
 };
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
 export const ToastProvider = ({ children }: PropsWithChildren) => {
-  const [toast, setToast] = useState<ToastPayload & { open: boolean }>({
-    open: false,
-    type: 'info',
-    title: '',
-    message: '',
-  });
-
-  const showMessage = useCallback((payload: ToastPayload) => {
-    setToast({ open: true, type: payload.type || 'info', title: payload.title, message: payload.message });
-  }, []);
-
-  const handleClose = () => setToast((prev) => ({ ...prev, open: false }));
+  const [queue] = useState(createDialogQueue);
+  const current = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
+  useEffect(() => () => queue.clear(), [queue]);
+  const value = useMemo(
+    () => ({
+      showMessage: queue.showMessage,
+      showError: (message: string) =>
+        queue.showMessage({ type: 'error', message }),
+      showSuccess: (message: string) =>
+        queue.showMessage({ type: 'success', message }),
+      confirm: queue.confirm,
+    }),
+    [queue],
+  );
 
   return (
-    <ToastContext.Provider value={{ showMessage }}>
+    <ToastContext.Provider value={value}>
       {children}
-      <MessagePopup
-        open={toast.open}
-        type={toast.type}
-        title={toast.title}
-        message={toast.message}
-        onClose={handleClose}
-      />
+      {current && (
+        <MessagePopup
+          key={current.id}
+          open
+          type={current.type}
+          title={current.title}
+          message={current.message}
+          confirmText={current.confirmText}
+          cancelText={current.cancelText}
+          danger={current.danger}
+          onConfirm={
+            current.kind === 'confirm'
+              ? () => queue.settle(current.id, true)
+              : undefined
+          }
+          onClose={() => queue.settle(current.id, false)}
+        />
+      )}
     </ToastContext.Provider>
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useToast = () => {
   const ctx = useContext(ToastContext);
   if (!ctx) throw new Error('useToast must be used within ToastProvider');

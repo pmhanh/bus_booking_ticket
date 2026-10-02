@@ -1,3 +1,4 @@
+import { useToast } from '../../../shared/providers/ToastProvider';
 import { useState } from 'react';
 import { Button } from '../../../shared/components/ui/Button';
 import { apiClient } from '../../../shared/api/api';
@@ -5,13 +6,16 @@ import { apiClient } from '../../../shared/api/api';
 interface BusPhotoUploadProps {
   busId: number;
   photos: string[];
-  accessToken: string;
   onPhotoChange: () => void;
 }
 
-export function BusPhotoUpload({ busId, photos, accessToken, onPhotoChange }: BusPhotoUploadProps) {
+export function BusPhotoUpload({
+  busId,
+  photos,
+  onPhotoChange,
+}: BusPhotoUploadProps) {
+  const { showSuccess, showError, confirm } = useToast();
   const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState('');
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -21,26 +25,18 @@ export function BusPhotoUpload({ busId, photos, accessToken, onPhotoChange }: Bu
     formData.append('photo', file);
 
     setUploading(true);
-    setMessage('');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/buses/${busId}/photos`, {
+      await apiClient(`/admin/buses/${busId}/photos`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
         body: formData,
+        timeout: 90000,
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Upload failed');
-      }
-
-      setMessage('Tải ảnh lên thành công!');
+      showSuccess('Tải ảnh lên thành công!');
       onPhotoChange();
     } catch (err) {
-      setMessage((err as Error).message || 'Không thể tải ảnh lên');
+      showError((err as Error).message || 'Không thể tải ảnh lên');
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -48,17 +44,17 @@ export function BusPhotoUpload({ busId, photos, accessToken, onPhotoChange }: Bu
   };
 
   const handleDelete = async (photoId: string) => {
-    if (!window.confirm('Xóa ảnh này?')) return;
+    if (!(await confirm({ message: 'Xóa ảnh này?', danger: true }))) return;
 
     try {
-      await apiClient(`/admin/buses/${busId}/photos/${photoId}`, {
+      await apiClient(`/admin/buses/${busId}/photos?url=${encodeURIComponent(photoId)}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 90000,
       });
-      setMessage('Xóa ảnh thành công!');
+      showSuccess('Xóa ảnh thành công!');
       onPhotoChange();
     } catch (err) {
-      setMessage((err as Error).message || 'Không thể xóa ảnh');
+      showError((err as Error).message || 'Không thể xóa ảnh');
     }
   };
 
@@ -73,34 +69,27 @@ export function BusPhotoUpload({ busId, photos, accessToken, onPhotoChange }: Bu
             disabled={uploading}
             className="hidden"
           />
-          <span className={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${uploading ? 'bg-white/5 text-gray-400 cursor-not-allowed' : 'bg-white/10 text-white hover:bg-white/20 cursor-pointer'}`}>
+          <span
+            className={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${uploading ? 'bg-white/5 text-gray-400 cursor-not-allowed' : 'bg-white/10 text-white hover:bg-white/20 cursor-pointer'}`}
+          >
             {uploading ? 'Đang tải...' : 'Tải ảnh lên'}
           </span>
         </label>
         <span className="text-xs text-gray-400">
-          JPG, PNG, GIF, WEBP (max 5MB)
+          JPG, PNG, GIF, WEBP (tối đa 5 MB)
         </span>
       </div>
-
-      {message && (
-        <div
-          className={`text-sm px-3 py-2 rounded-lg ${
-            message.includes('thành công')
-              ? 'text-green-300 bg-green-600/20 border border-green-600/30'
-              : 'text-red-300 bg-red-600/20 border border-red-600/30'
-          }`}
-        >
-          {message}
-        </div>
-      )}
 
       {photos && photos.length > 0 ? (
         <div className="grid grid-cols-3 gap-3">
           {photos.map((photo) => (
-            <div key={photo} className="relative group rounded-lg overflow-hidden border border-white/10">
+            <div
+              key={photo}
+              className="relative group rounded-lg overflow-hidden border border-white/10"
+            >
               <img
-                src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/../uploads/buses/${photo}`}
-                alt="Bus"
+                src={photo}
+                alt="Xe khách"
                 className="w-full h-32 object-cover"
               />
               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

@@ -1,3 +1,4 @@
+import { statusLabel, refundMethodLabel } from '../../../shared/utils/displayLabels';
 import { Button } from '../../../shared/components/ui/Button';
 import type { Booking, BookingStatus } from '../types/booking';
 
@@ -6,13 +7,6 @@ type Props = {
   onClose: () => void;
   onUpdateStatus: (reference: string, status: BookingStatus) => void;
   onRefund: () => void;
-};
-
-const statusLabel: Record<BookingStatus, string> = {
-  PENDING: 'Chờ xử lý',
-  CONFIRMED: 'Đã xác nhận',
-  CANCELLED: 'Đã hủy',
-  EXPIRED: 'Hết hạn',
 };
 
 export const BookingDetailDrawer = ({
@@ -25,18 +19,14 @@ export const BookingDetailDrawer = ({
   const canCancel =
     booking.status !== 'CANCELLED' && booking.status !== 'EXPIRED';
   const canRefund =
-    booking.payment?.status === 'SUCCESS' &&
-    booking.payment.refundedAt === undefined;
+    !!booking.payment && ['SUCCESS'].includes(booking.payment.status);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/50">
       <div className="h-full w-full max-w-2xl bg-surface overflow-y-auto">
         <div className="sticky top-0 bg-surface border-b border-white/10 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">Chi tiết Booking</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-          >
+          <h2 className="text-xl font-bold text-white">Chi tiết đặt chỗ</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
             ✕
           </button>
         </div>
@@ -49,12 +39,14 @@ export const BookingDetailDrawer = ({
             </h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <div className="text-gray-400">Mã booking</div>
-                <div className="text-white font-mono">{booking.reference}</div>
+                <div className="text-gray-400">Mã đặt chỗ</div>
+                <div className="text-white font-mono">
+                  {booking.reference ?? booking.id}
+                </div>
               </div>
               <div>
                 <div className="text-gray-400">Trạng thái</div>
-                <div className="text-white">{statusLabel[booking.status]}</div>
+                <div className="text-white">{statusLabel(booking.status)}</div>
               </div>
               <div>
                 <div className="text-gray-400">Ngày đặt</div>
@@ -176,7 +168,7 @@ export const BookingDetailDrawer = ({
                 </div>
                 <div>
                   <span className="text-gray-400">Trạng thái: </span>
-                  <span className="text-white">{booking.payment.status}</span>
+                  <span className="text-white">{statusLabel(booking.payment.status)}</span>
                 </div>
                 <div>
                   <span className="text-gray-400">Số tiền: </span>
@@ -185,6 +177,13 @@ export const BookingDetailDrawer = ({
                   </span>
                 </div>
 
+                {booking.payment.pendingRefund && (
+                  <p className="text-amber-300">
+                    {booking.payment.pendingRefund.status === 'PENDING'
+                      ? 'Yêu cầu hoàn tiền đang được xử lý.'
+                      : 'Hoàn tiền thất bại. Vui lòng kiểm tra và gửi lại yêu cầu.'}
+                  </p>
+                )}
                 {booking.payment.refundedAt && (
                   <div className="mt-4 p-3 rounded-lg bg-error/10 border border-error/30">
                     <div className="text-error font-semibold mb-2">
@@ -205,15 +204,15 @@ export const BookingDetailDrawer = ({
                     <div>
                       <span className="text-gray-400">Phương thức: </span>
                       <span className="text-white">
-                        {booking.payment.refundMethod}
+                        {refundMethodLabel(booking.payment.refundMethod)}
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-400">Thời gian: </span>
                       <span className="text-white">
-                        {new Date(
-                          booking.payment.refundedAt,
-                        ).toLocaleString('vi-VN')}
+                        {new Date(booking.payment.refundedAt).toLocaleString(
+                          'vi-VN',
+                        )}
                       </span>
                     </div>
                   </div>
@@ -228,18 +227,22 @@ export const BookingDetailDrawer = ({
             <div className="flex flex-wrap gap-3">
               {canConfirm && (
                 <Button
-                  onClick={() => onUpdateStatus(booking.reference, 'CONFIRMED')}
+                  onClick={() =>
+                    onUpdateStatus(booking.reference ?? booking.id, 'CONFIRMED')
+                  }
                 >
-                  Xác nhận booking
+                  Xác nhận đặt chỗ
                 </Button>
               )}
 
               {canCancel && (
                 <Button
                   variant="ghost"
-                  onClick={() => onUpdateStatus(booking.reference, 'CANCELLED')}
+                  onClick={() =>
+                    onUpdateStatus(booking.reference ?? booking.id, 'CANCELLED')
+                  }
                 >
-                  Hủy booking
+                  Hủy đặt chỗ
                 </Button>
               )}
 

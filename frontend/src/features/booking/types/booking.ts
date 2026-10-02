@@ -25,26 +25,22 @@ export type Booking = {
   contactEmail?: string | null;
   contactPhone: string;
   passengers: BookingPassenger[];
+  details?: {
+    seatCodeSnapshot: string;
+    passengerName: string;
+    passengerPhone?: string;
+    passengerIdNumber?: string;
+    priceSnapshot: number;
+  }[];
   totalPrice: number;
   status: BookingStatus;
+  expiresAt?: string | null;
+  checkoutExpiresAt?: string | null;
+  refundPending?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
 
-export type SeatStatus = {
-  code: string;
-  row: number;
-  col: number;
-  price: number;
-  isActive: boolean;
-  status: 'available' | 'held' | 'booked' | 'inactive';
-  bookedBy?: string;
-  bookingId?: string;
-  expiresAt?: string | null;
-};
-
-export type SeatStatusResponse = {
-  seatMap: { id: number; name: string; rows: number; cols: number } | null;
-  seats: SeatStatus[];
-  basePrice: number;
+export type BookingResponse = Omit<Booking, 'passengers'> & {
+  passengers?: BookingPassenger[];
 };

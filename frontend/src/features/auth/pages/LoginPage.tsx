@@ -1,19 +1,27 @@
+import { getErrorMessage } from '../../../shared/utils/errorMessage';
+import { validateEmail } from '../../../shared/utils/validation';
 import type { FormEvent } from 'react';
-import { useMemo, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { useRef, useState } from 'react';
+import { Link, Navigate, useSearchParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { Button } from '../../../shared/components/ui/Button';
 import { Card } from '../../../shared/components/ui/Card';
 import { FormField } from '../../../shared/components/ui/FormField';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../../../shared/providers/ToastProvider';
+import { safeReturnTo } from '../utils/returnTo';
 
 type LoginForm = { email: string; password: string };
 type FieldErrors = { email?: string; password?: string };
 
 export const LoginPage = () => {
   const { login, googleLogin, user } = useAuth();
-  const { showMessage } = useToast();
   const navigate = useNavigate();
+  const { showMessage } = useToast();
+  const [params] = useSearchParams();
+  const returnTo = safeReturnTo(params.get('returnTo'));
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState<LoginForm>({ email: '', password: '' });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -23,12 +31,8 @@ export const LoginPage = () => {
     const errors: FieldErrors = {};
 
     // Email
-    const email = nextForm.email.trim();
-    if (!email) {
-      errors.email = 'Vui lòng nhập email';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = 'Email không đúng định dạng';
-    }
+    const emailError = validateEmail(nextForm.email);
+    if (emailError) errors.email = emailError;
     // Password
     const password = nextForm.password;
     if (!password.trim()) {
@@ -40,37 +44,50 @@ export const LoginPage = () => {
     return errors;
   };
 
-  const isValid = useMemo(() => Object.keys(validate(form)).length === 0, [form]);
+  const isValid = Object.keys(validate(form)).length === 0;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
 
     const errors = validate(form);
     setFieldErrors(errors);
     if (Object.keys(errors).length) return;
 
+    submittingRef.current = true;
+    setSubmitting(true);
     try {
-      const loggedInUser = await login(form.email, form.password);
-      navigate(loggedInUser.role === 'admin' ? '/dashboard' : '/');
+      await login(form.email, form.password);
     } catch (err) {
+      if (
+        axios.isAxiosError<{ code?: string }>(err) &&
+        err.response?.data?.code === 'ACCOUNT_BANNED'
+      ) {
+        navigate('/account-banned', { replace: true });
+        return;
+      }
       showMessage({
         type: 'error',
         title: 'Đăng nhập thất bại',
-        message: (err as any)?.response?.data?.message || (err as Error)?.message,
+        message: getErrorMessage(err, 'Đăng nhập thất bại'),
       });
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   };
 
-  const handleGoogle = async () => {
-    try {
-      const socialUser = await googleLogin();
-      navigate(socialUser.role === 'admin' ? '/dashboard' : '/profile');
-    } catch (err) {
-      showMessage({ type: 'error', title: 'Đăng nhập Google thất bại', message: (err as Error)?.message });
-    }
+  const handleGoogle = () => {
+    googleLogin(returnTo ?? '/');
   };
 
-  if (user) return <Navigate to={user.role === 'admin' ? '/dashboard' : '/profile'} replace />;
+  if (user)
+    return (
+      <Navigate
+        to={returnTo ?? (user.role === 'admin' ? '/dashboard' : '/')}
+        replace
+      />
+    );
 
   return (
     <div className="max-w-lg mx-auto min-h-[70vh] flex items-center w-full">
@@ -107,20 +124,36 @@ export const LoginPage = () => {
               setForm(nextForm);
 
               const errors = validate(nextForm);
-              setFieldErrors((prev) => ({ ...prev, password: errors.password }));
+              setFieldErrors((prev) => ({
+                ...prev,
+                password: errors.password,
+              }));
             }}
             onBlur={() => {
               const errors = validate(form);
-              setFieldErrors((prev) => ({ ...prev, password: errors.password }));
+              setFieldErrors((prev) => ({
+                ...prev,
+                password: errors.password,
+              }));
             }}
             error={fieldErrors.password}
           />
 
           <div className="flex gap-3">
-            <Button type="submit" className="flex-1" disabled={!isValid}>
-              Đăng nhập
+            <Button
+              type="submit"
+              className="flex-1"
+              disabled={!isValid || submitting}
+            >
+              {submitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
             </Button>
-            <Button type="button" variant="secondary" className="flex-1" onClick={handleGoogle}>
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              disabled={submitting}
+              onClick={handleGoogle}
+            >
               Đăng nhập bằng Google
             </Button>
           </div>

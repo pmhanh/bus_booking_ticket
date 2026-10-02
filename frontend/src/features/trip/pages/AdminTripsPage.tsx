@@ -1,13 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { statusLabel } from '../../../shared/utils/displayLabels';
+import {
+  optionTextStyle,
+  placeholderOptionStyle,
+  parseSelectNumber,
+} from '../../../shared/utils/select';
+import { useToast } from '../../../shared/providers/ToastProvider';
+import { useCallback, useEffect, useState } from 'react';
 import { Card } from '../../../shared/components/ui/Card';
 import { Button } from '../../../shared/components/ui/Button';
 import { FormField } from '../../../shared/components/ui/FormField';
 import { apiClient } from '../../../shared/api/api';
 import { useAuth } from '../../auth/context/AuthContext';
-import type { Trip } from '../types/trip';
+import { getTripDisplayStatus, type Trip } from '../types/trip';
 import type { Route } from '../../route/types/route';
 import type { Bus } from '../../bus/types/bus';
 import type { City } from '../../route/types/city';
+import { searchCities } from '../../route/api/cities';
 
 type TripForm = {
   id?: number;
@@ -19,37 +27,40 @@ type TripForm = {
   status: Trip['status'];
 };
 
-const optionTextStyle: React.CSSProperties = { color: '#111' };
-const placeholderOptionStyle: React.CSSProperties = { color: '#666' };
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 
-const tripStatusLabel: Record<Trip['status'], string> = {
-  SCHEDULED: 'Đã lên lịch',
-  IN_PROGRESS: 'Đang chạy',
-  COMPLETED: 'Hoàn thành',
-  CANCELLED: 'Đã huỷ',
+const vietnamLocalDateTimeToIso = (value: string) => {
+  const normalized = value.length === 16 ? `${value}:00` : value;
+  const date = new Date(`${normalized}+07:00`);
+  if (Number.isNaN(date.getTime())) throw new Error('Thời gian không hợp lệ');
+  return date.toISOString();
+};
+
+const isoToVietnamLocalDateTime = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Date(date.getTime() + VIETNAM_OFFSET_MS)
+    .toISOString()
+    .slice(0, 16);
 };
 
 const tripStatusBadgeClass: Record<Trip['status'], string> = {
   SCHEDULED: 'bg-green-600/30 text-green-300',
+  DELAYED: 'bg-amber-600/30 text-amber-200',
   IN_PROGRESS: 'bg-blue-600/30 text-blue-200',
   COMPLETED: 'bg-white/10 text-gray-200',
   CANCELLED: 'bg-error/30 text-error',
 };
 
-const parseSelectNumber = (value: string): number | '' => {
-  if (value === '') return '';
-  const n = Number(value);
-  return Number.isFinite(n) ? n : '';
-};
-
 export const AdminTripsPage = () => {
+  const { showError, showSuccess, confirm } = useToast();
   const { accessToken } = useAuth();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [buses, setBuses] = useState<Bus[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+
   const [form, setForm] = useState<TripForm>({
     routeId: '',
     busId: '',
@@ -70,71 +81,48 @@ export const AdminTripsPage = () => {
     destinationCityId?: number | '';
   }>({});
 
-  const [apiMessage, setApiMessage] = useState('');
+  const loadTrips = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (filters.routeId) params.append('routeId', String(filters.routeId));
+    if (filters.busId) params.append('busId', String(filters.busId));
+    if (filters.fromDate) params.append('fromDate', filters.fromDate);
+    if (filters.toDate) params.append('toDate', filters.toDate);
+    if (filters.status) params.append('status', filters.status);
+    if (filters.sortBy) params.append('sortBy', filters.sortBy);
+    if (filters.originCityId)
+      params.append('originCityId', String(filters.originCityId));
+    if (filters.destinationCityId)
+      params.append('destinationCityId', String(filters.destinationCityId));
 
-  const routesRef = useRef<Route[]>([]);
-
-  const headers = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
-
-  const loadTrips = useCallback(
-    async (availableRoutes?: Route[]) => {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (filters.routeId) params.append('routeId', String(filters.routeId));
-      if (filters.busId) params.append('busId', String(filters.busId));
-      if (filters.fromDate) params.append('fromDate', filters.fromDate);
-      if (filters.toDate) params.append('toDate', filters.toDate);
-      if (filters.status) params.append('status', filters.status);
-      if (filters.sortBy) params.append('sortBy', filters.sortBy);
-
-      try {
-        const res = await apiClient<Trip[]>(`/admin/trips?${params.toString()}`, { headers });
-
-        const filtered = res.filter((t) => {
-          if (filters.originCityId && t.route.originCity.id !== filters.originCityId) return false;
-          if (filters.destinationCityId && t.route.destinationCity.id !== filters.destinationCityId)
-            return false;
-          return true;
-        });
-
-        const routeList = availableRoutes ?? routesRef.current;
-        const map = new Map(routeList.map((r) => [r.id, r]));
-
-        setTrips(
-          filtered.map((t) => ({
-            ...t,
-            route: map.get(t.route.id) || t.route,
-          })),
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [filters, headers],
-  );
-
-  const loadData = useCallback(async () => {
-    if (!accessToken) return;
-      setLoading(true);
     try {
-      const [routeRes, busRes, cityRes] = await Promise.all([
-        apiClient<{ routes: Route[] }>('/admin/routes', { headers }),
-        apiClient<Bus[]>('/admin/buses', { headers }),
-        apiClient<City[]>('/admin/cities', { headers }),
-      ]);
-      setRoutes(routeRes.routes);
-      routesRef.current = routeRes.routes;
-      setBuses(busRes);
-      setCities(cityRes);
-      await loadTrips(routeRes.routes);
+      const res = await apiClient<Trip[]>(`/admin/trips?${params.toString()}`);
+
+      setTrips(res);
+    } catch (error) {
+      showError((error as Error).message || 'Không thể tải danh sách chuyến.');
     } finally {
       setLoading(false);
     }
-  }, [accessToken, headers, loadTrips]);
+  }, [filters, showError]);
 
-  useEffect(() => {
-    routesRef.current = routes;
-  }, [routes]);
+  const loadData = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const [routeRes, busRes, cityRes] = await Promise.all([
+        apiClient<{ routes: Route[] }>('/admin/routes'),
+        apiClient<Bus[]>('/admin/buses'),
+        searchCities('', 100),
+      ]);
+      setRoutes(routeRes.routes);
+      setBuses(busRes);
+      setCities(cityRes);
+    } catch (error) {
+      showError(
+        (error as Error).message || 'Không thể tải dữ liệu tạo chuyến.',
+      );
+    }
+  }, [accessToken, showError]);
 
   useEffect(() => {
     void loadData();
@@ -143,7 +131,7 @@ export const AdminTripsPage = () => {
   useEffect(() => {
     if (!accessToken) return;
     void loadTrips();
-  }, [accessToken, filters, loadTrips]);
+  }, [accessToken, loadTrips]);
 
   const resetForm = () => {
     setForm({
@@ -157,18 +145,22 @@ export const AdminTripsPage = () => {
   };
 
   const submitTrip = async () => {
-    setError('');
-    setApiMessage('');
-
-    if (!form.routeId || !form.busId || !form.departureTime || !form.arrivalTime || !form.basePrice) {
-      setError('Vui lòng nhập đủ thông tin chuyến.');
+    if (
+      !form.routeId ||
+      !form.busId ||
+      !form.departureTime ||
+      !form.arrivalTime ||
+      !form.basePrice
+    ) {
+      showError('Vui lòng nhập đủ thông tin chuyến.');
       return;
     }
 
     const basePayload = {
+      busId: Number(form.busId),
       routeId: Number(form.routeId),
-      departureTime: form.departureTime,
-      arrivalTime: form.arrivalTime,
+      departureTime: vietnamLocalDateTimeToIso(form.departureTime),
+      arrivalTime: vietnamLocalDateTimeToIso(form.arrivalTime),
       basePrice: Number(form.basePrice),
       status: form.status,
     };
@@ -177,20 +169,21 @@ export const AdminTripsPage = () => {
       if (form.id) {
         await apiClient(`/admin/trips/${form.id}`, {
           method: 'PATCH',
-          headers,
           body: basePayload,
         });
       } else {
         await apiClient('/admin/trips', {
           method: 'POST',
-          headers,
-          body: { ...basePayload, busId: Number(form.busId) },
+          body: basePayload,
         });
       }
+      showSuccess(
+        form.id ? 'Cập nhật chuyến thành công!' : 'Tạo chuyến thành công!',
+      );
       resetForm();
       void loadTrips();
     } catch (err) {
-      setApiMessage((err as Error).message || 'Không thể lưu chuyến');
+      showError((err as Error).message || 'Không thể lưu chuyến');
     }
   };
 
@@ -199,36 +192,68 @@ export const AdminTripsPage = () => {
       id: trip.id,
       routeId: trip.route.id,
       busId: trip.bus.id,
-      departureTime: trip.departureTime.slice(0, 16),
-      arrivalTime: trip.arrivalTime.slice(0, 16),
+      departureTime: isoToVietnamLocalDateTime(trip.departureTime),
+      arrivalTime: isoToVietnamLocalDateTime(trip.arrivalTime),
       basePrice: trip.basePrice,
       status: trip.status,
     });
   };
 
   const cancelTrip = async (id: number) => {
-    if (!window.confirm('Hủy chuyến này? Hành động này sẽ cập nhật trạng thái sang CANCELLED.')) return;
+    if (
+      !(await confirm({
+        message:
+          'Hủy chuyến này? Hành động này sẽ cập nhật trạng thái sang Đã hủy.',
+        danger: true,
+      }))
+    )
+      return;
     try {
-      await apiClient(`/admin/trips/${id}/cancel`, { method: 'PATCH', headers });
+      const result = await apiClient<{
+        ok: boolean;
+        message: string;
+        refunds: { failures: Array<{ paymentId: string; message: string }> };
+      }>(`/admin/trips/${id}/cancel`, { method: 'PATCH' });
+      if (!result.ok) {
+        showError(
+          `${result.message}\n${result.refunds.failures
+            .map((failure) => `${failure.paymentId}: ${failure.message}`)
+            .join('\n')}`,
+        );
+      } else {
+        showSuccess('Hủy chuyến thành công!');
+      }
       void loadTrips();
     } catch (err) {
-      alert('Không thể hủy chuyến: ' + (err as Error).message);
+      showError('Không thể hủy chuyến: ' + (err as Error).message);
     }
   };
 
   const deleteTrip = async (id: number) => {
-    if (!window.confirm('Xóa chuyến này? Hành động này sẽ xóa hoàn toàn!')) return;
-    await apiClient(`/admin/trips/${id}`, { method: 'DELETE', headers });
-    void loadTrips();
+    if (
+      !(await confirm({
+        message: 'Xóa chuyến này? Hành động này sẽ xóa hoàn toàn!',
+        danger: true,
+      }))
+    )
+      return;
+    try {
+      await apiClient(`/admin/trips/${id}`, { method: 'DELETE' });
+      showSuccess('Xóa chuyến thành công!');
+      await loadTrips();
+    } catch (error) {
+      showError((error as Error).message || 'Không thể xóa chuyến.');
+    }
   };
-
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="text-center">
         <div>
           <h1 className="text-2xl font-bold text-white">Lịch chuyến</h1>
-          <p className="text-sm text-gray-400">Tạo, chỉnh sửa chuyến và gán xe.</p>
+          <p className="text-sm text-gray-400">
+            Tạo, chỉnh sửa chuyến và gán xe.
+          </p>
         </div>
       </div>
 
@@ -239,7 +264,9 @@ export const AdminTripsPage = () => {
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={form.routeId === '' ? '' : String(form.routeId)}
-              onChange={(e) => setForm({ ...form, routeId: parseSelectNumber(e.target.value) })}
+              onChange={(e) =>
+                setForm({ ...form, routeId: parseSelectNumber(e.target.value) })
+              }
             >
               <option value="" style={placeholderOptionStyle}>
                 Chọn tuyến
@@ -257,8 +284,9 @@ export const AdminTripsPage = () => {
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={form.busId === '' ? '' : String(form.busId)}
-              onChange={(e) => setForm({ ...form, busId: parseSelectNumber(e.target.value) })}
-              disabled={Boolean(form.id)}
+              onChange={(e) =>
+                setForm({ ...form, busId: parseSelectNumber(e.target.value) })
+              }
             >
               <option value="" style={placeholderOptionStyle}>
                 Chọn xe
@@ -270,10 +298,16 @@ export const AdminTripsPage = () => {
                 </option>
               ))}
             </select>
+            {form.id && (
+              <p className="mt-2 text-xs text-gray-400">
+                Chỉ đổi xe khi chuyến chưa có khách đặt vé và không có ghế đang
+                được giữ.
+              </p>
+            )}
           </label>
 
           <FormField
-            label="Giá cơ bản"
+            label="Giá"
             type="number"
             value={form.basePrice}
             onChange={(e) => {
@@ -282,33 +316,40 @@ export const AdminTripsPage = () => {
             }}
           />
 
-	          <label className="block text-sm text-gray-200">
-	            <div className="mb-2 font-medium">Trạng thái</div>
-	            <select
-	              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
-	              value={form.status}
-	              onChange={(e) => setForm({ ...form, status: e.target.value as Trip['status'] })}
-	            >
-	              <option value="SCHEDULED" style={optionTextStyle}>
-	                {tripStatusLabel.SCHEDULED}
-	              </option>
-	              <option value="IN_PROGRESS" style={optionTextStyle}>
-	                {tripStatusLabel.IN_PROGRESS}
-	              </option>
-	              <option value="COMPLETED" style={optionTextStyle}>
-	                {tripStatusLabel.COMPLETED}
-	              </option>
-	              <option value="CANCELLED" style={optionTextStyle}>
-	                {tripStatusLabel.CANCELLED}
-	              </option>
-	            </select>
-	          </label>
+          <label className="block text-sm text-gray-200">
+            <div className="mb-2 font-medium">Trạng thái</div>
+            <select
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              value={form.status}
+              onChange={(e) =>
+                setForm({ ...form, status: e.target.value as Trip['status'] })
+              }
+            >
+              <option value="SCHEDULED" style={optionTextStyle}>
+                {statusLabel('SCHEDULED')}
+              </option>
+              <option value="DELAYED" style={optionTextStyle}>
+                {statusLabel('DELAYED')}
+              </option>
+              <option value="IN_PROGRESS" style={optionTextStyle}>
+                {statusLabel('IN_PROGRESS')}
+              </option>
+              <option value="COMPLETED" style={optionTextStyle}>
+                {statusLabel('COMPLETED')}
+              </option>
+              <option value="CANCELLED" style={optionTextStyle}>
+                {statusLabel('CANCELLED')}
+              </option>
+            </select>
+          </label>
 
           <FormField
             label="Giờ đi"
             type="datetime-local"
             value={form.departureTime}
-            onChange={(e) => setForm({ ...form, departureTime: e.target.value })}
+            onChange={(e) =>
+              setForm({ ...form, departureTime: e.target.value })
+            }
           />
           <FormField
             label="Giờ đến"
@@ -317,13 +358,6 @@ export const AdminTripsPage = () => {
             onChange={(e) => setForm({ ...form, arrivalTime: e.target.value })}
           />
         </div>
-
-        {error ? <div className="text-error text-sm mt-2">{error}</div> : null}
-        {apiMessage ? (
-          <div className="mt-2 rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
-            {apiMessage}
-          </div>
-        ) : null}
 
         <div className="mt-4 flex gap-2">
           <Button onClick={submitTrip}>{form.id ? 'Lưu' : 'Tạo chuyến'}</Button>
@@ -341,8 +375,17 @@ export const AdminTripsPage = () => {
             <div className="mb-2 font-medium">Tuyến</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
-              value={filters.routeId === '' || filters.routeId == null ? '' : String(filters.routeId)}
-              onChange={(e) => setFilters((f) => ({ ...f, routeId: parseSelectNumber(e.target.value) }))}
+              value={
+                filters.routeId === '' || filters.routeId == null
+                  ? ''
+                  : String(filters.routeId)
+              }
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  routeId: parseSelectNumber(e.target.value),
+                }))
+              }
             >
               <option value="" style={placeholderOptionStyle}>
                 Tất cả
@@ -359,8 +402,17 @@ export const AdminTripsPage = () => {
             <div className="mb-2 font-medium">Xe</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
-              value={filters.busId === '' || filters.busId == null ? '' : String(filters.busId)}
-              onChange={(e) => setFilters((f) => ({ ...f, busId: parseSelectNumber(e.target.value) }))}
+              value={
+                filters.busId === '' || filters.busId == null
+                  ? ''
+                  : String(filters.busId)
+              }
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  busId: parseSelectNumber(e.target.value),
+                }))
+              }
             >
               <option value="" style={placeholderOptionStyle}>
                 Tất cả
@@ -377,13 +429,17 @@ export const AdminTripsPage = () => {
             label="Từ ngày"
             type="date"
             value={filters.fromDate ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, fromDate: e.target.value }))
+            }
           />
           <FormField
             label="Đến ngày"
             type="date"
             value={filters.toDate ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, toDate: e.target.value }))
+            }
           />
 
           <label className="block text-sm text-gray-200">
@@ -391,9 +447,16 @@ export const AdminTripsPage = () => {
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={
-                filters.originCityId === '' || filters.originCityId == null ? '' : String(filters.originCityId)
+                filters.originCityId === '' || filters.originCityId == null
+                  ? ''
+                  : String(filters.originCityId)
               }
-              onChange={(e) => setFilters((f) => ({ ...f, originCityId: parseSelectNumber(e.target.value) }))}
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  originCityId: parseSelectNumber(e.target.value),
+                }))
+              }
             >
               <option value="" style={placeholderOptionStyle}>
                 Tất cả
@@ -411,12 +474,16 @@ export const AdminTripsPage = () => {
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={
-                filters.destinationCityId === '' || filters.destinationCityId == null
+                filters.destinationCityId === '' ||
+                filters.destinationCityId == null
                   ? ''
                   : String(filters.destinationCityId)
               }
               onChange={(e) =>
-                setFilters((f) => ({ ...f, destinationCityId: parseSelectNumber(e.target.value) }))
+                setFilters((f) => ({
+                  ...f,
+                  destinationCityId: parseSelectNumber(e.target.value),
+                }))
               }
             >
               <option value="" style={placeholderOptionStyle}>
@@ -435,13 +502,21 @@ export const AdminTripsPage = () => {
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={filters.status ?? ''}
-              onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value || undefined }))}
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  status: e.target.value || undefined,
+                }))
+              }
             >
               <option value="" style={placeholderOptionStyle}>
                 Tất cả
               </option>
               <option value="SCHEDULED" style={optionTextStyle}>
                 Đã lên lịch
+              </option>
+              <option value="DELAYED" style={optionTextStyle}>
+                Bị hoãn
               </option>
               <option value="IN_PROGRESS" style={optionTextStyle}>
                 Đang chạy
@@ -460,13 +535,18 @@ export const AdminTripsPage = () => {
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={filters.sortBy ?? ''}
-              onChange={(e) => setFilters((f) => ({ ...f, sortBy: e.target.value || undefined }))}
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  sortBy: e.target.value || undefined,
+                }))
+              }
             >
               <option value="" style={placeholderOptionStyle}>
                 Theo thời gian
               </option>
               <option value="bookings" style={optionTextStyle}>
-                Theo số bookings
+                Theo số lượt đặt chỗ
               </option>
             </select>
           </label>
@@ -485,29 +565,46 @@ export const AdminTripsPage = () => {
         </div>
         <div className="divide-y divide-white/5 text-sm text-gray-200">
           {trips.map((t) => (
-            <div key={t.id} className="grid grid-cols-7 gap-3 py-2 items-center">
+            <div
+              key={t.id}
+              className="grid grid-cols-7 gap-3 py-2 items-center"
+            >
               <div>
-                <div className="text-white font-semibold">{t.route?.name || '-'}</div>
+                <div className="text-white font-semibold">
+                  {t.route?.name || '-'}
+                </div>
                 <div className="text-xs text-gray-400">
-                  {t.route?.originCity?.name ?? '?'} {'->'} {t.route?.destinationCity?.name ?? '?'}
+                  {t.route?.originCity?.name ?? '?'} {'->'}{' '}
+                  {t.route?.destinationCity?.name ?? '?'}
                 </div>
               </div>
               <div>
                 <div className="text-white">{t.bus?.name || '-'}</div>
                 <div className="text-xs text-gray-400">
-                  {t.bus?.plateNumber || ''} {t.bus?.seatMap ? `• ${t.bus.seatMap.name}` : ''}
+                  {t.bus?.plateNumber || ''}{' '}
+                  {t.bus?.seatMap ? `• ${t.bus.seatMap.name}` : ''}
                 </div>
               </div>
-              <div className="text-xs text-gray-200">{new Date(t.departureTime).toLocaleString()}</div>
-              <div className="text-xs text-gray-200">{new Date(t.arrivalTime).toLocaleString()}</div>
-              <div className="text-white font-semibold">{t.basePrice.toLocaleString('vi-VN')}đ</div>
-	              <div>
-	                <span
-	                  className={`inline-flex px-2 py-1 rounded-full text-xs ${tripStatusBadgeClass[t.status]}`}
-	                >
-	                  {tripStatusLabel[t.status]}
-	                </span>
-	              </div>
+              <div className="text-xs text-gray-200">
+                {new Date(t.departureTime).toLocaleString('vi-VN', {
+                  timeZone: 'Asia/Ho_Chi_Minh',
+                })}
+              </div>
+              <div className="text-xs text-gray-200">
+                {new Date(t.arrivalTime).toLocaleString('vi-VN', {
+                  timeZone: 'Asia/Ho_Chi_Minh',
+                })}
+              </div>
+              <div className="text-white font-semibold">
+                {t.basePrice.toLocaleString('vi-VN')}đ
+              </div>
+              <div>
+                <span
+                  className={`inline-flex px-2 py-1 rounded-full text-xs ${tripStatusBadgeClass[getTripDisplayStatus(t)]}`}
+                >
+                  {statusLabel(getTripDisplayStatus(t))}
+                </span>
+              </div>
               <div className="text-right space-x-2">
                 <Button variant="secondary" onClick={() => startEdit(t)}>
                   Sửa

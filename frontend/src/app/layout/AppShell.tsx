@@ -11,7 +11,7 @@ export const AppShell = ({ children }: PropsWithChildren) => {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const booting = status === 'booting';
+  const booting = status === 'booting' || status === 'error';
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -36,26 +36,25 @@ export const AppShell = ({ children }: PropsWithChildren) => {
           <nav className="flex items-center gap-3 text-sm uppercase tracking-wide">
             {user?.role === 'admin' ? (
               <>
-                <NavItem to="/dashboard" label="Dashboard" />
-                <NavItem to="/admin/bookings" label="Bookings" />
-                <NavItem to="/admin/buses" label="Buses" />
-                <NavItem to="/admin/trips" label="Trips" />
-                <NavItem to="/admin/trip-operations" label="Operations" />
-                <NavItem to="/admin/routes" label="Routes" />
-                <NavItem to="/admin/seat-maps" label="Seat maps" />
-                <NavItem to="/admin/reports" label="Reports" />
-                <NavItem to="/admin/users" label="Users" />
+                <NavItem to="/dashboard" label="Tổng quan" />
+                <NavItem to="/admin/bookings" label="Đặt chỗ" />
+                <NavItem to="/admin/buses" label="Xe" />
+                <NavItem to="/admin/trips" label="Chuyến đi" />
+                <NavItem to="/admin/trip-operations" label="Vận hành" />
+                <NavItem to="/admin/routes" label="Tuyến đường" />
+                <NavItem to="/admin/seat-maps" label="Sơ đồ ghế" />
+                <NavItem to="/admin/users" label="Người dùng" />
               </>
             ) : (
               <>
-                <NavItem to="/" label="Home" />
-                <NavItem to="/bookings" label="Bookings" />
+                <NavItem to="/" label="Trang chủ" />
+                <NavItem to="/bookings" label="Đặt chỗ" />
               </>
             )}
           </nav>
           <div className="flex items-center gap-3">
             {booting ? (
-              <div className="h-10 w-28 rounded-xl bg-white/10 animate-pulse" aria-label="Loading session" />
+              <div className="h-10 w-28 rounded-xl bg-white/10 animate-pulse" aria-label="Đang tải phiên đăng nhập" />
             ) : user ? (
               <>
                 <div className="relative" ref={menuRef}>
@@ -75,22 +74,22 @@ export const AppShell = ({ children }: PropsWithChildren) => {
                       className="w-full text-left px-4 py-2 hover:bg-white/10 text-sm"
                       onClick={() => navigate('/profile')}
                     >
-                      Profile
+                      Hồ sơ
                     </button>
                     <button
                       className="w-full text-left px-4 py-2 hover:bg-white/10 text-sm"
                       onClick={() => navigate('/settings')}
                     >
-                      Settings
+                      Cài đặt
                     </button>
                   </div>
                 </div>
                 <Button variant="ghost" onClick={logout}>
-                  Logout
+                  Đăng xuất
                 </Button>
               </>
             ) : (
-              <Button onClick={() => navigate('/login')}>Login</Button>
+              <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
             )}
           </div>
         </header>

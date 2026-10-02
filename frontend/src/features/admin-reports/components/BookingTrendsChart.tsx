@@ -32,7 +32,7 @@ export const BookingTrendsChart = ({ bookingsData, revenueData }: Props) => {
             orientation="right"
             stroke="#9ca3af"
             style={{ fontSize: '12px' }}
-            tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+            tickFormatter={(value) => `${(value / 1000).toFixed(0)} nghìn`}
           />
           <Tooltip
             contentStyle={{
@@ -43,10 +43,10 @@ export const BookingTrendsChart = ({ bookingsData, revenueData }: Props) => {
             }}
             formatter={(value: number | undefined, name: string | undefined) => {
               if (value === undefined) return ['0', name || ''];
-              if (name === 'revenue') {
+              if (name === 'Doanh thu') {
                 return [`${value.toLocaleString('vi-VN')}đ`, 'Doanh thu'];
               }
-              return [value, 'Bookings'];
+              return [value, 'Lượt đặt chỗ'];
             }}
           />
           <Legend />
@@ -57,7 +57,7 @@ export const BookingTrendsChart = ({ bookingsData, revenueData }: Props) => {
             stroke="#3b82f6"
             strokeWidth={2}
             dot={{ fill: '#3b82f6', r: 3 }}
-            name="Số booking"
+            name="Số lượt đặt chỗ"
           />
           <Line
             yAxisId="right"

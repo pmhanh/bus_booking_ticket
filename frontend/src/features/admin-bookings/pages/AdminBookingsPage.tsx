@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { statusLabel } from '../../../shared/utils/displayLabels';
+import { useToast } from '../../../shared/providers/ToastProvider';
+import { useCallback, useEffect, useState } from 'react';
 import { Card } from '../../../shared/components/ui/Card';
 import { Button } from '../../../shared/components/ui/Button';
 import { FormField } from '../../../shared/components/ui/FormField';
@@ -8,13 +10,6 @@ import type { Booking, BookingStatus } from '../types/booking';
 import { BookingDetailDrawer } from '../components/BookingDetailDrawer';
 import { RefundModal } from '../components/RefundModal';
 
-const bookingStatusLabel: Record<BookingStatus, string> = {
-  PENDING: 'Chờ xử lý',
-  CONFIRMED: 'Đã xác nhận',
-  CANCELLED: 'Đã hủy',
-  EXPIRED: 'Hết hạn',
-};
-
 const bookingStatusClass: Record<BookingStatus, string> = {
   PENDING: 'bg-yellow-600/30 text-yellow-300',
   CONFIRMED: 'bg-green-600/30 text-green-300',
@@ -23,13 +18,13 @@ const bookingStatusClass: Record<BookingStatus, string> = {
 };
 
 export const AdminBookingsPage = () => {
+  const { showError, confirm, showSuccess } = useToast();
   const { accessToken } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showRefundModal, setShowRefundModal] = useState(false);
-  const [message, setMessage] = useState('');
 
   const [filters, setFilters] = useState<{
     status?: BookingStatus | '';
@@ -43,15 +38,9 @@ export const AdminBookingsPage = () => {
     offset: 0,
   });
 
-  const headers = useMemo(
-    () => ({ Authorization: `Bearer ${accessToken}` }),
-    [accessToken],
-  );
-
   const loadBookings = useCallback(async () => {
     if (!accessToken) return;
     setLoading(true);
-    setMessage('');
 
     const params = new URLSearchParams();
     if (filters.status) params.append('status', filters.status);
@@ -67,16 +56,16 @@ export const AdminBookingsPage = () => {
         total: number;
         limit: number;
         offset: number;
-      }>(`/admin/bookings?${params.toString()}`, { headers });
+      }>(`/admin/bookings?${params.toString()}`);
 
       setBookings(response.data);
       setTotal(response.total);
     } catch (err) {
-      setMessage((err as Error).message || 'Không thể tải danh sách booking');
+      showError((err as Error).message || 'Không thể tải danh sách đặt chỗ');
     } finally {
       setLoading(false);
     }
-  }, [accessToken, filters, headers]);
+  }, [accessToken, filters, showError]);
 
   useEffect(() => {
     void loadBookings();
@@ -85,38 +74,34 @@ export const AdminBookingsPage = () => {
   const viewDetails = async (booking: Booking) => {
     try {
       const detailed = await apiClient<Booking>(
-        `/admin/bookings/${booking.reference}`,
-        { headers },
+        `/admin/bookings/${booking.reference ?? booking.id}`,
       );
       setSelectedBooking(detailed);
     } catch (err) {
-      setMessage((err as Error).message || 'Không thể tải chi tiết booking');
+      showError((err as Error).message || 'Không thể tải chi tiết đặt chỗ');
     }
   };
 
-  const updateStatus = async (
-    reference: string,
-    status: BookingStatus,
-  ) => {
+  const updateStatus = async (reference: string, status: BookingStatus) => {
     if (
-      !window.confirm(
-        `Bạn có chắc muốn đổi trạng thái booking này sang ${bookingStatusLabel[status]}?`,
-      )
+      !(await confirm({
+        message: `Bạn có chắc muốn đổi trạng thái đặt chỗ này sang ${statusLabel(status)}?`,
+        danger: true,
+      }))
     )
       return;
 
     try {
       await apiClient(`/admin/bookings/${reference}/status`, {
         method: 'PATCH',
-        headers,
         body: { status },
       });
 
-      setMessage('Cập nhật trạng thái thành công!');
+      showSuccess('Cập nhật trạng thái thành công!');
       void loadBookings();
       setSelectedBooking(null);
     } catch (err) {
-      setMessage((err as Error).message || 'Không thể cập nhật trạng thái');
+      showError((err as Error).message || 'Không thể cập nhật trạng thái');
     }
   };
 
@@ -128,7 +113,7 @@ export const AdminBookingsPage = () => {
   const handleRefundSuccess = () => {
     setShowRefundModal(false);
     setSelectedBooking(null);
-    setMessage('Hoàn tiền thành công!');
+    showSuccess('Hoàn tiền thành công!');
     void loadBookings();
   };
 
@@ -141,21 +126,16 @@ export const AdminBookingsPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Quản lý Bookings</h1>
-          <p className="text-sm text-gray-400">
-            Xem và quản lý tất cả bookings, xử lý refund
-          </p>
-        </div>
-      </div>
+      <h1 className="text-center text-2xl font-bold text-white">
+        Quản lý đặt chỗ
+      </h1>
 
       <Card title="Bộ lọc">
         <div className="grid md:grid-cols-4 gap-4">
           <label className="block text-sm text-gray-200">
             <div className="mb-2 font-medium">Trạng thái</div>
             <select
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
+              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200 [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-gray-100"
               value={filters.status ?? ''}
               onChange={(e) =>
                 setFilters((f) => ({
@@ -174,7 +154,7 @@ export const AdminBookingsPage = () => {
           </label>
 
           <FormField
-            label="Từ ngày"
+            label="Từ ngày khởi hành"
             type="date"
             value={filters.fromDate ?? ''}
             onChange={(e) =>
@@ -183,7 +163,7 @@ export const AdminBookingsPage = () => {
           />
 
           <FormField
-            label="Đến ngày"
+            label="Đến ngày khởi hành"
             type="date"
             value={filters.toDate ?? ''}
             onChange={(e) =>
@@ -193,37 +173,27 @@ export const AdminBookingsPage = () => {
 
           <FormField
             label="Tìm kiếm"
-            placeholder="Tên, email, hoặc mã booking..."
+            placeholder="Tên, email, hoặc mã đặt chỗ..."
             value={filters.search ?? ''}
             onChange={(e) =>
               setFilters((f) => ({ ...f, search: e.target.value, offset: 0 }))
             }
           />
         </div>
+        <div className="mt-4 flex justify-end">
+          <Button
+            variant="secondary"
+            onClick={() => setFilters((f) => ({ limit: f.limit, offset: 0 }))}
+          >
+            Xóa bộ lọc
+          </Button>
+        </div>
       </Card>
 
-      {message && (
-        <div
-          className={`px-4 py-3 rounded-lg ${
-            message.includes('thành công')
-              ? 'bg-green-600/20 border border-green-600/30 text-green-300'
-              : 'bg-error/10 border border-error/30 text-error'
-          }`}
-        >
-          {message}
-        </div>
-      )}
-
-      <Card
-        title={
-          loading
-            ? 'Đang tải...'
-            : `Danh sách Bookings (${total})`
-        }
-      >
+      <Card title={loading ? 'Đang tải...' : `Danh sách đặt chỗ (${total})`}>
         <div className="overflow-x-auto">
           <div className="grid grid-cols-8 gap-3 text-xs uppercase text-gray-400 border-b border-white/5 pb-2 min-w-[1000px]">
-            <div>Mã booking</div>
+            <div>Mã đặt chỗ</div>
             <div>Khách hàng</div>
             <div>Tuyến</div>
             <div>Ngày đi</div>
@@ -236,7 +206,7 @@ export const AdminBookingsPage = () => {
           <div className="divide-y divide-white/5 text-sm text-gray-200 min-w-[1000px]">
             {bookings.length === 0 ? (
               <div className="py-8 text-center text-gray-400">
-                Không có booking nào
+                Không có lượt đặt chỗ nào
               </div>
             ) : (
               bookings.map((booking) => (
@@ -245,7 +215,7 @@ export const AdminBookingsPage = () => {
                   className="grid grid-cols-8 gap-3 py-3 items-center"
                 >
                   <div className="font-mono text-primary">
-                    {booking.reference}
+                    {booking.reference ?? booking.id}
                   </div>
                   <div>
                     <div className="font-semibold text-white">
@@ -260,7 +230,10 @@ export const AdminBookingsPage = () => {
                     {booking.trip.route.destinationCity.name}
                   </div>
                   <div className="text-xs">
-                    {new Date(booking.trip.departureTime).toLocaleDateString('vi-VN')}
+                    {new Date(booking.trip.departureTime).toLocaleDateString(
+                      'vi-VN',
+                      { timeZone: 'Asia/Ho_Chi_Minh' },
+                    )}
                   </div>
                   <div>{booking.details.length} ghế</div>
                   <div className="font-semibold text-white">
@@ -272,7 +245,7 @@ export const AdminBookingsPage = () => {
                         bookingStatusClass[booking.status]
                       }`}
                     >
-                      {bookingStatusLabel[booking.status]}
+                      {statusLabel(booking.status)}
                     </span>
                   </div>
                   <div className="text-right space-x-2">
@@ -293,7 +266,7 @@ export const AdminBookingsPage = () => {
         {totalPages > 1 && (
           <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-4">
             <div className="text-sm text-gray-400">
-              Trang {currentPage} / {totalPages} (Tổng: {total} bookings)
+              Trang {currentPage} / {totalPages} (Tổng: {total} lượt đặt chỗ)
             </div>
             <div className="flex gap-2">
               <Button
@@ -341,7 +314,6 @@ export const AdminBookingsPage = () => {
           booking={selectedBooking}
           onClose={() => setShowRefundModal(false)}
           onSuccess={handleRefundSuccess}
-          accessToken={accessToken!}
         />
       )}
     </div>

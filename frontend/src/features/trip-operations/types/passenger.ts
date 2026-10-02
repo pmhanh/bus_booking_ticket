@@ -1,3 +1,5 @@
+import type { TripStatus } from '../../trip/types/trip';
+
 export interface Passenger {
   bookingDetailId: number;
   bookingReference: string;
@@ -20,7 +22,9 @@ export interface TripInfo {
   };
   departureTime: string;
   arrivalTime: string;
-  status: string;
+  status: TripStatus;
+  realStatus?: TripStatus;
+  checkInBlockedReason?: string | null;
 }
 
 export interface PassengerListResponse {

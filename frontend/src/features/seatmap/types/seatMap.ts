@@ -1,15 +1,12 @@
-import type { Route } from '../../route/types/route';
-import type { Bus } from '../../bus/types/bus';
+import type { Trip } from '../../trip/types/trip';
 
 export type SeatStatus = 'available' | 'inactive' | 'held' | 'booked';
-
 export type SeatDefinition = {
   id: number;
   code: string;
   row: number;
   col: number;
   isActive: boolean;
-  seatType?: string;
 };
 
 export type SeatMap = {
@@ -18,6 +15,7 @@ export type SeatMap = {
   rows: number;
   cols: number;
   seats: SeatDefinition[];
+  busCount?: number;
 };
 
 export type SeatWithState = SeatDefinition & {
@@ -27,15 +25,7 @@ export type SeatWithState = SeatDefinition & {
 };
 
 export type SeatAvailability = {
-  trip: {
-    id: number;
-    basePrice: number;
-    departureTime: string;
-    arrivalTime: string;
-    status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
-    route: Route;
-    bus: Bus;
-  };
+  trip: Trip;
   seatMap: Pick<SeatMap, 'id' | 'name' | 'rows' | 'cols'>;
   seats: SeatWithState[];
 };

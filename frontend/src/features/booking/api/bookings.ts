@@ -1,5 +1,10 @@
 import { apiClient } from '../../../shared/api/api';
-import type { Booking, PassengerInput, SeatStatusResponse } from '../types/booking';
+import type {
+  Booking,
+  BookingResponse,
+  PassengerInput,
+} from '../types/booking';
+import { normalizeBooking } from '../utils/bookingPassengers';
 
 export type CreateBookingPayload = {
   tripId: number;
@@ -8,95 +13,82 @@ export type CreateBookingPayload = {
   contactPhone?: string;
   passengers: PassengerInput[];
   lockToken: string;
-  holdExpiresAt: string;
+  pickupStopId?: number;
+  dropoffStopId?: number;
 };
-
-export async function getSeatStatus(tripId: number) {
-  return apiClient<SeatStatusResponse>(`/bookings/trips/${tripId}/seats`, { method: 'GET' });
-}
 
 export type CreateBookingResponse = {
   ok: true;
   booking: Booking;
 };
 
-export async function createBooking(payload: CreateBookingPayload, token?: string | null) {
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-  return apiClient<CreateBookingResponse>('/bookings', {
+export type LookupBookingsResponse = {
+  data: Booking[];
+  total: number;
+  limit: number;
+};
+
+export async function createBooking(payload: CreateBookingPayload) {
+  const response = await apiClient<
+    Omit<CreateBookingResponse, 'booking'> & { booking: BookingResponse }
+  >('/bookings', {
     method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
+    body: payload,
   });
+  return { ...response, booking: normalizeBooking(response.booking) };
 }
 
-// export async function createBooking(payload: CreateBookingPayload, token?: string | null) {
-//   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-//   return apiClient<Booking>('/bookings', {
-//     method: 'POST',
-//     headers,
-//     body: JSON.stringify(payload),
-//   });
-// }
-
-export async function getMyBookings(token: string) {
-  return apiClient<Booking[]>('/bookings/my', {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function getMyBookings() {
+  const response = await apiClient<BookingResponse[]>('/bookings/my');
+  return response.map(normalizeBooking);
 }
 
-export async function lookupBooking(code?: string, phone?: string, email?: string) {
+export async function lookupBooking(
+  phone?: string,
+  email?: string,
+  tripDate?: string,
+) {
   const qs = new URLSearchParams();
-  if (code) qs.set('reference', code);
   if (phone) qs.set('phone', phone);
   if (email) qs.set('email', email);
-  return apiClient<Booking>(`/bookings/lookup?${qs.toString()}`, { method: 'GET' });
+  if (tripDate) qs.set('tripDate', tripDate);
+  const response = await apiClient<
+    Omit<LookupBookingsResponse, 'data'> & { data: BookingResponse[] }
+  >(`/bookings/lookup?${qs.toString()}`, {
+    method: 'GET',
+  });
+  return { ...response, data: response.data.map(normalizeBooking) };
 }
 
-export async function getBooking(id: string, token?: string | null, contact?: { phone?: string; email?: string }) {
+export async function getBooking(
+  id: string,
+  contact?: { phone?: string; email?: string },
+) {
   const qs = new URLSearchParams();
   if (contact?.phone) qs.set('phone', contact.phone);
   if (contact?.email) qs.set('email', contact.email);
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-  const path = qs.toString() ? `/bookings/${id}?${qs.toString()}` : `/bookings/${id}`;
-  return apiClient<Booking>(path, { method: 'GET', headers });
+
+  const path = qs.toString()
+    ? `/bookings/${id}?${qs.toString()}`
+    : `/bookings/${id}`;
+  return normalizeBooking(await apiClient<BookingResponse>(path));
 }
 
 export async function cancelBooking(
   id: string,
-  token?: string | null,
   contact?: { phone?: string; email?: string },
+  pendingOnly = false,
 ) {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  const body = {
+    ...(pendingOnly ? { pendingOnly: true } : {}),
+    contactPhone: contact?.phone,
+    contactEmail: contact?.email,
   };
 
-  // IMPORTANT: backend expects contactEmail/contactPhone (CancelBookingDto)
-  const body =
-    token
-      ? undefined // logged-in: no need to send contact
-      : JSON.stringify({
-          contactPhone: contact?.phone,
-          contactEmail: contact?.email,
-        });
-
-  return apiClient<Booking>(`/bookings/${id}/cancel`, {
-    method: 'PATCH',
-    headers,
-    body,
-  });
-}
-
-export async function updateBooking(
-  id: string,
-  payload: Partial<CreateBookingPayload>,
-  token?: string | null,
-) {
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-  return apiClient<Booking>(`/bookings/${id}`, {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify(payload),
-  });
+  return normalizeBooking(
+    await apiClient<BookingResponse>(`/bookings/${id}/cancel`, {
+      method: 'PATCH',
+      body,
+    }),
+  );
 }

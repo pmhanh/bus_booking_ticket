@@ -1,4 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  optionTextStyle,
+  placeholderOptionStyle,
+  parseSelectNumber,
+} from '../../../shared/utils/select';
+import { useToast } from '../../../shared/providers/ToastProvider';
+import {
+  busTypeLabel,
+  busTypeOptions,
+  amenityLabel,
+  amenityOptions,
+} from '../../../shared/utils/displayLabels';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '../../../shared/components/ui/Card';
 import { Button } from '../../../shared/components/ui/Button';
 import { FormField } from '../../../shared/components/ui/FormField';
@@ -14,28 +26,22 @@ type BusForm = {
   plateNumber: string;
   busType?: string;
   amenities?: string[];
-  seatMapId?: number | '';
-};
-
-const optionTextStyle: React.CSSProperties = { color: '#111' };
-const placeholderOptionStyle: React.CSSProperties = { color: '#666' };
-
-const parseSelectNumber = (value: string): number | '' => {
-  if (value === '') return '';
-  const n = Number(value);
-  return Number.isFinite(n) ? n : '';
+  seatMapId: number | '';
 };
 
 export const AdminBusesPage = () => {
+  const { showError, showSuccess, confirm } = useToast();
   const { accessToken } = useAuth();
   const [buses, setBuses] = useState<Bus[]>([]);
   const [seatMaps, setSeatMaps] = useState<SeatMap[]>([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [form, setForm] = useState<BusForm>({
     name: '',
     plateNumber: '',
-    busType: 'STANDARD',
+    busType: 'SEATER',
     seatMapId: '',
     amenities: [],
   });
@@ -45,30 +51,28 @@ export const AdminBusesPage = () => {
     seatMapId?: number | '';
   }>({});
 
-  const headers = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
-
   const loadBuses = useCallback(async () => {
     if (!accessToken) return;
     setLoading(true);
     try {
-      const res = await apiClient<Bus[]>('/admin/buses', { headers });
+      const res = await apiClient<Bus[]>('/admin/buses');
       setBuses(res);
     } catch (err) {
-      console.error('Failed to load buses:', err);
+      showError((err as Error).message || 'Không thể tải danh sách xe.');
     } finally {
       setLoading(false);
     }
-  }, [accessToken, headers]);
+  }, [accessToken, showError]);
 
   const loadSeatMaps = useCallback(async () => {
     if (!accessToken) return;
     try {
-      const res = await apiClient<SeatMap[]>('/admin/seat-maps', { headers });
+      const res = await apiClient<SeatMap[]>('/admin/seat-maps');
       setSeatMaps(res);
     } catch (err) {
-      console.error('Failed to load seat maps:', err);
+      showError((err as Error).message || 'Không thể tải danh sách sơ đồ ghế.');
     }
-  }, [accessToken, headers]);
+  }, [accessToken, showError]);
 
   useEffect(() => {
     void loadBuses();
@@ -79,91 +83,113 @@ export const AdminBusesPage = () => {
     setForm({
       name: '',
       plateNumber: '',
-      busType: 'STANDARD',
+      busType: 'SEATER',
       seatMapId: '',
       amenities: [],
     });
-    setMessage('');
   };
 
   const submitBus = async () => {
-    setMessage('');
+    if (savingRef.current) return;
 
-    if (!form.name || !form.plateNumber) {
-      setMessage('Vui lòng nhập tên xe và biển số.');
+    const name = form.name.trim();
+    const plateNumber = form.plateNumber.trim().toUpperCase();
+    if (!name || !plateNumber || form.seatMapId === '') {
+      showError('Vui lòng nhập tên xe, biển số và chọn sơ đồ ghế.');
+      return;
+    }
+
+    if (
+      buses.some(
+        (bus) =>
+          bus.id !== form.id &&
+          bus.plateNumber.trim().toUpperCase() === plateNumber,
+      )
+    ) {
+      showError(`Biển số ${plateNumber} đã được sử dụng bởi xe khác.`);
       return;
     }
 
     const payload = {
-      name: form.name,
-      plateNumber: form.plateNumber,
+      name,
+      plateNumber,
       busType: form.busType,
-      seatMapId: form.seatMapId ? Number(form.seatMapId) : undefined,
+      seatMapId: Number(form.seatMapId),
       amenities: form.amenities || [],
     };
 
+    savingRef.current = true;
+    setSaving(true);
     try {
       if (form.id) {
         await apiClient(`/admin/buses/${form.id}`, {
           method: 'PATCH',
-          headers,
           body: payload,
         });
-        setMessage('Cập nhật xe thành công!');
       } else {
-        await apiClient<Bus>('/admin/buses', {
-          method: 'POST',
-          headers,
-          body: payload,
-        });
-        setMessage('Tạo xe thành công!');
+        await apiClient<Bus>('/admin/buses', { method: 'POST', body: payload });
       }
       resetForm();
-      void loadBuses();
+      showSuccess(form.id ? 'Cập nhật xe thành công!' : 'Tạo xe thành công!');
+      await loadBuses();
     } catch (err) {
-      setMessage((err as Error).message || 'Không thể lưu xe');
+      showError((err as Error).message || 'Không thể lưu xe');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
   const startEdit = (bus: Bus) => {
+    if (savingRef.current) return;
     setForm({
       id: bus.id,
       name: bus.name,
       plateNumber: bus.plateNumber,
-      busType: bus.busType || 'STANDARD',
+      busType: bus.busType || 'SEATER',
       seatMapId: bus.seatMap?.id || '',
       amenities: bus.amenities || [],
     });
   };
 
   const deleteBus = async (id: number) => {
-    if (!window.confirm('Xóa xe này? Hành động này không thể hoàn tác!')) return;
+    if (savingRef.current) return;
+    if (
+      !(await confirm({
+        message: 'Xóa xe này? Hành động này không thể hoàn tác!',
+        danger: true,
+      }))
+    )
+      return;
     try {
-      await apiClient(`/admin/buses/${id}`, { method: 'DELETE', headers });
-      setMessage('Xóa xe thành công!');
+      await apiClient(`/admin/buses/${id}`, { method: 'DELETE' });
+      showSuccess('Xóa xe thành công!');
       void loadBuses();
     } catch (err) {
-      setMessage((err as Error).message || 'Không thể xóa xe');
+      showError((err as Error).message || 'Không thể xóa xe');
     }
   };
 
   const filteredBuses = buses.filter((bus) => {
     if (filters.busType && bus.busType !== filters.busType) return false;
-    if (filters.seatMapId && bus.seatMap?.id !== filters.seatMapId) return false;
+    if (filters.seatMapId && bus.seatMap?.id !== filters.seatMapId)
+      return false;
     return true;
   });
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="text-center">
         <div>
           <h1 className="text-2xl font-bold text-white">Quản lý xe</h1>
-          <p className="text-sm text-gray-400">Tạo, chỉnh sửa và quản lý xe buýt.</p>
+          <p className="text-sm text-gray-400">
+            Tạo, chỉnh sửa và quản lý xe buýt.
+          </p>
         </div>
       </div>
 
       <Card title={form.id ? 'Cập nhật xe' : 'Thêm xe mới'}>
-        <div className="grid md:grid-cols-3 gap-4">
+        <fieldset disabled={saving} className="grid md:grid-cols-3 gap-4">
           <FormField
             label="Tên xe"
             value={form.name}
@@ -178,24 +204,17 @@ export const AdminBusesPage = () => {
           />
 
           <label className="block text-sm text-gray-200">
-            <div className="mb-2 font-medium">Loại xe</div>
+            <div className="mb-2 font-medium">Loại ghế / xe</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={form.busType}
               onChange={(e) => setForm({ ...form, busType: e.target.value })}
             >
-              <option value="STANDARD" style={optionTextStyle}>
-                STANDARD
-              </option>
-              <option value="SLEEPER" style={optionTextStyle}>
-                SLEEPER
-              </option>
-              <option value="LIMOUSINE" style={optionTextStyle}>
-                LIMOUSINE
-              </option>
-              <option value="MINIBUS" style={optionTextStyle}>
-                MINIBUS
-              </option>
+              {busTypeOptions.map(({ value, label }) => (
+                <option key={value} value={value} style={optionTextStyle}>
+                  {label}
+                </option>
+              ))}
             </select>
           </label>
 
@@ -209,7 +228,7 @@ export const AdminBusesPage = () => {
                 setForm({ ...form, seatMapId: value });
               }}
             >
-              <option value="" style={placeholderOptionStyle}>
+              <option value="" disabled style={placeholderOptionStyle}>
                 Chưa gán
               </option>
               {seatMaps.map((m) => (
@@ -219,23 +238,56 @@ export const AdminBusesPage = () => {
               ))}
             </select>
           </label>
-        </div>
-
-        {message ? (
-          <div
-            className={`text-sm mt-3 px-3 py-2 rounded-lg ${
-              message.includes('thành công')
-                ? 'text-green-300 bg-green-600/20 border border-green-600/30'
-                : 'text-error bg-error/10 border border-error/30'
-            }`}
-          >
-            {message}
-          </div>
-        ) : null}
+          <fieldset className="md:col-span-3 min-w-0">
+            <legend className="mb-2 text-sm font-medium text-gray-200">
+              Tiện ích trên xe
+            </legend>
+            <p className="mb-3 text-xs text-gray-400">
+              Chọn các tiện ích xe cung cấp cho hành khách.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {amenityOptions.map(({ value, label }) => {
+                const checked = (form.amenities ?? []).some(
+                  (item) => amenityLabel(item) === label,
+                );
+                return (
+                  <label
+                    key={value}
+                    className={`flex items-center gap-3 rounded-lg border px-3 py-3 text-sm cursor-pointer ${checked ? 'border-emerald-400/50 bg-emerald-500/10 text-emerald-200' : 'border-white/10 bg-white/5 text-gray-200'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      className="h-4 w-4 shrink-0 accent-emerald-500"
+                      onChange={(event) => {
+                        const enabled = event.target.checked;
+                        setForm((previous) => {
+                          // Treat existing aliases (e.g. WATER/DRINKING_WATER) as one option.
+                          const remaining = (previous.amenities ?? []).filter(
+                            (item) => amenityLabel(item) !== label,
+                          );
+                          return {
+                            ...previous,
+                            amenities: enabled
+                              ? [...remaining, value]
+                              : remaining,
+                          };
+                        });
+                      }}
+                    />
+                    {label}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+        </fieldset>
 
         <div className="mt-4 flex gap-2">
-          <Button onClick={submitBus}>{form.id ? 'Cập nhật' : 'Tạo xe'}</Button>
-          <Button variant="secondary" onClick={resetForm}>
+          <Button onClick={submitBus} disabled={saving}>
+            {saving ? 'Đang lưu...' : form.id ? 'Cập nhật' : 'Tạo xe'}
+          </Button>
+          <Button variant="secondary" onClick={resetForm} disabled={saving}>
             {form.id ? 'Hủy' : 'Xóa'}
           </Button>
         </div>
@@ -248,23 +300,21 @@ export const AdminBusesPage = () => {
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
               value={filters.busType ?? ''}
-              onChange={(e) => setFilters((f) => ({ ...f, busType: e.target.value || undefined }))}
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  busType: e.target.value || undefined,
+                }))
+              }
             >
               <option value="" style={placeholderOptionStyle}>
                 Tất cả
               </option>
-              <option value="STANDARD" style={optionTextStyle}>
-                STANDARD
-              </option>
-              <option value="SLEEPER" style={optionTextStyle}>
-                SLEEPER
-              </option>
-              <option value="LIMOUSINE" style={optionTextStyle}>
-                LIMOUSINE
-              </option>
-              <option value="MINIBUS" style={optionTextStyle}>
-                MINIBUS
-              </option>
+              {busTypeOptions.map(({ value, label }) => (
+                <option key={value} value={value} style={optionTextStyle}>
+                  {label}
+                </option>
+              ))}
             </select>
           </label>
 
@@ -272,8 +322,17 @@ export const AdminBusesPage = () => {
             <div className="mb-2 font-medium">Sơ đồ ghế</div>
             <select
               className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-gray-200"
-              value={filters.seatMapId === '' || filters.seatMapId == null ? '' : String(filters.seatMapId)}
-              onChange={(e) => setFilters((f) => ({ ...f, seatMapId: parseSelectNumber(e.target.value) }))}
+              value={
+                filters.seatMapId === '' || filters.seatMapId == null
+                  ? ''
+                  : String(filters.seatMapId)
+              }
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  seatMapId: parseSelectNumber(e.target.value),
+                }))
+              }
             >
               <option value="" style={placeholderOptionStyle}>
                 Tất cả
@@ -288,7 +347,11 @@ export const AdminBusesPage = () => {
         </div>
       </Card>
 
-      <Card title={loading ? 'Đang tải...' : `Danh sách xe (${filteredBuses.length})`}>
+      <Card
+        title={
+          loading ? 'Đang tải...' : `Danh sách xe (${filteredBuses.length})`
+        }
+      >
         <div className="grid grid-cols-6 gap-3 text-xs uppercase text-gray-400 border-b border-white/5 pb-2">
           <div>Tên xe</div>
           <div>Biển số</div>
@@ -308,20 +371,23 @@ export const AdminBusesPage = () => {
                   <div className="text-gray-200">{bus.plateNumber}</div>
                   <div>
                     <span className="inline-flex px-2 py-1 rounded-full text-xs bg-primary/20 text-primary">
-                      {bus.busType || 'N/A'}
+                      {busTypeLabel(bus.busType)}
                     </span>
                   </div>
                   <div className="text-gray-200">
                     {bus.seatMap ? (
                       <span>
-                        {bus.seatMap.name} ({bus.seatMap.rows}x{bus.seatMap.cols})
+                        {bus.seatMap.name} ({bus.seatMap.rows}x
+                        {bus.seatMap.cols})
                       </span>
                     ) : (
                       <span className="text-gray-500 italic">Chưa gán</span>
                     )}
                   </div>
                   <div className="text-xs text-gray-400">
-                    {bus.amenities && bus.amenities.length > 0 ? bus.amenities.join(', ') : 'Không có'}
+                    {bus.amenities && bus.amenities.length > 0
+                      ? bus.amenities.map(amenityLabel).join(', ')
+                      : 'Không có'}
                   </div>
                   <div className="text-right space-x-2">
                     <Button variant="secondary" onClick={() => startEdit(bus)}>
@@ -333,12 +399,13 @@ export const AdminBusesPage = () => {
                   </div>
                 </div>
                 <div className="mt-3 pl-4 border-l-2 border-white/10">
-                  <div className="text-xs uppercase text-gray-400 mb-2">Ảnh xe</div>
+                  <div className="text-xs uppercase text-gray-400 mb-2">
+                    Ảnh xe
+                  </div>
                   {accessToken && (
                     <BusPhotoUpload
                       busId={bus.id}
                       photos={bus.photos || []}
-                      accessToken={accessToken}
                       onPhotoChange={loadBuses}
                     />
                   )}
